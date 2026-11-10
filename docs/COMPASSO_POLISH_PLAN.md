@@ -14,7 +14,7 @@ A auditoria de 10/11 identificou sete achados P01–P07 e um inventário de vidr
 
 | Etapa | Entrega | Evidência para encerrar | Estado |
 | --- | --- | --- | --- |
-| 1 | Proteger rascunhos e edições | Rascunho restaurado após encerrar o app; cancelar câmera mantém conteúdo; edição alterada tem saída segura | Validada localmente |
+| 1 | Proteger rascunhos e edições | Rascunho restaurado após encerrar o app; cancelar câmera mantém conteúdo; edição alterada tem saída segura | Publicada para teste |
 | 2 | Estabilizar compositor, vidro e menus | Repetir 0:49 e 2:49 do vídeo sem manchas; menu respeita cabeçalho; compositor mantém âncora | Pendente |
 | 3 | Uniformizar materiais e feedback | Bandeja +, Guardar, ferramentas e remoções têm estados legíveis e resposta consistente | Pendente |
 | 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Pendente |
@@ -114,3 +114,5 @@ Aceite: testes verdes, funcionamento offline e comparação antes/depois. Ganhos
 
 
 Entrega da etapa 1 em 10/11/2026. Proteção de rascunhos, fotos duráveis, restauração de foco/edição, confirmação de descarte e identidade estável na gravação. Verificação local com 23 testes; validação no iPhone pendente.
+
+Registro da entrega 1 — commit 49d3ccf714ef87dc8ef95fa52b319db91a6dff90, build 1.0.0 (4), canal production, OTA ff6b20bd-e285-45aa-ba4e-6dc3f29456d5. Link do EAS https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/ff6b20bd-e285-45aa-ba4e-6dc3f29456d5. npm run verify passou com 23 testes. Pendente no iPhone: encerrar/reabrir com foto e citação, cancelar câmera e descartar/retomar edição.
