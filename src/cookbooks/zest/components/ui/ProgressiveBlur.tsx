@@ -10,31 +10,35 @@ const MaskedView = NativeMaskedView as unknown as ComponentType<
 >;
 
 /**
- * A reading boundary made of blur rather than a fade: three masked strengths,
- * so words visibly soften as they pass beneath the toolbar or the composer.
+ * Softens words as they pass beneath the toolbar or composer.
  */
 export function ProgressiveBlur({
   height,
   edge,
   color,
   tint = "light",
+  singlePass = false,
 }: {
   height: number;
   edge: "top" | "bottom";
   color: string;
   tint?: "light" | "dark";
+  singlePass?: boolean;
 }) {
   const reverse = edge === "bottom";
+  const layers = singlePass
+    ? [{ intensity: 48, fadeStart: 0.35, fadeEnd: 1 }]
+    : [
+        { intensity: 10, fadeStart: 0.66, fadeEnd: 1 },
+        { intensity: 28, fadeStart: 0.46, fadeEnd: 0.86 },
+        { intensity: 66, fadeStart: 0.24, fadeEnd: 0.64 },
+      ];
   return (
     <View
       pointerEvents="none"
       style={{ position: "absolute", left: 0, right: 0, [edge]: 0, height }}
     >
-      {[
-        { intensity: 10, fadeStart: 0.66, fadeEnd: 1 },
-        { intensity: 28, fadeStart: 0.46, fadeEnd: 0.86 },
-        { intensity: 66, fadeStart: 0.24, fadeEnd: 0.64 },
-      ].map((layer, index) => (
+      {layers.map((layer, index) => (
         <MaskedView
           key={index}
           style={{ position: "absolute", inset: 0 }}

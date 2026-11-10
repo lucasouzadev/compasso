@@ -28,7 +28,13 @@ import {
   scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Pressable,
   ScrollView as NativeScroll,
@@ -48,6 +54,7 @@ import Animated, {
   useDerivedValue,
   type SharedValue,
   useSharedValue,
+  useReducedMotion,
   withTiming,
 } from "react-native-reanimated";
 import { selectionAsync } from "expo-haptics";
@@ -169,6 +176,8 @@ export function EntryActions({
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const source = bounds;
+  const [glassVisible, setGlassVisible] = useState(true);
+  const reducedMotion = useReducedMotion();
   const [sheetOpen, setSheetOpen] = useState(false);
   const pickedEmoji = useRef<string | undefined>(undefined);
   const closing = useRef(false);
@@ -243,7 +252,6 @@ export function EntryActions({
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: phase.get() }));
   const actionsStyle = useAnimatedStyle(() => ({
-    opacity: phase.get(),
     transform: [{ translateY: -6 * (1 - phase.get()) }],
   }));
   const railStyle = useAnimatedStyle(() => ({
@@ -257,17 +265,22 @@ export function EntryActions({
     transform: [{ translateY: (source.y - top) * (1 - phase.get()) }],
   }));
 
-  function finish() {
+  const finish = useCallback(() => {
     const action = pendingAction.current;
     pendingAction.current = undefined;
     onClose();
     action?.();
-  }
+  }, [onClose]);
 
   function close(action?: () => void) {
     if (closing.current) return;
     closing.current = true;
     pendingAction.current = action;
+    setGlassVisible(false);
+  }
+
+  useEffect(() => {
+    if (glassVisible) return;
     phase.set(
       withTiming(
         0,
@@ -277,7 +290,7 @@ export function EntryActions({
         },
       ),
     );
-  }
+  }, [glassVisible, phase, finish]);
 
   function reactTo(emoji: string) {
     recent = [emoji, ...recent.filter((item) => item !== emoji)].slice(0, 18);
@@ -320,7 +333,10 @@ export function EntryActions({
           style={styles.scrim}
         />
       </Animated.View>
-      <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+      <View
+        pointerEvents={glassVisible ? "box-none" : "none"}
+        style={StyleSheet.absoluteFill}
+      >
         <View
           style={[
             styles.rail,
@@ -332,7 +348,11 @@ export function EntryActions({
           ]}
         >
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <GlassSurface style={styles.railGlass} />
+            <GlassSurface
+              visible={glassVisible}
+              materialize={reducedMotion ? 0 : 0.16}
+              style={styles.railGlass}
+            />
           </View>
           <Animated.View
             style={[
@@ -415,32 +435,42 @@ export function EntryActions({
           ]}
         >
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <GlassSurface style={styles.actionsGlass} />
+            <GlassSurface
+              visible={glassVisible}
+              materialize={reducedMotion ? 0 : 0.16}
+              style={styles.actionsGlass}
+            />
           </View>
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.menuHighlight, { top: firstAction }, menuHighlight]}
-          />
-          <Host colorScheme="light" style={styles.actionRows}>
-            <VStack spacing={0}>
-              <MenuAction
-                title="Continuar"
-                icon="arrowshape.turn.up.left.fill"
-                onPress={() => close(onContinue)}
-              />
-              <MenuAction
-                title="Editar"
-                icon="pencil"
-                onPress={() => close(onEdit)}
-              />
-              <MenuAction
-                title="Excluir"
-                icon="trash"
-                destructive
-                onPress={() => close(onDelete)}
-              />
-            </VStack>
-          </Host>
+          <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.menuHighlight,
+                { top: firstAction },
+                menuHighlight,
+              ]}
+            />
+            <Host colorScheme="light" style={styles.actionRows}>
+              <VStack spacing={0}>
+                <MenuAction
+                  title="Continuar"
+                  icon="arrowshape.turn.up.left.fill"
+                  onPress={() => close(onContinue)}
+                />
+                <MenuAction
+                  title="Editar"
+                  icon="pencil"
+                  onPress={() => close(onEdit)}
+                />
+                <MenuAction
+                  title="Excluir"
+                  icon="trash"
+                  destructive
+                  onPress={() => close(onDelete)}
+                />
+              </VStack>
+            </Host>
+          </Animated.View>
         </Animated.View>
         <EmojiSheet
           visible={sheetOpen}

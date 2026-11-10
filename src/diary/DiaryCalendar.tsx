@@ -25,7 +25,6 @@ import { selectionAsync } from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { dayKey, monthCells, parseDay } from "../cookbooks/zest/data/diary";
-import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
 import { GlassSurface } from "../cookbooks/zest/components/ui/GlassSurface";
 import { theme } from "../cookbooks/zest/theme";
@@ -106,6 +105,10 @@ export function DiaryCalendar({
   const canOpenDay = selected === today || index.has(selected);
   const panelHeight = Math.min(580, height - insets.top - insets.bottom - 68);
   const compact = panelHeight < 470 && fontScale <= 1.2;
+  const hasDetail = !!detail;
+  const backdrop = useAnimatedStyle(() => ({
+    opacity: Math.max(0, Math.min(1, progress.get())),
+  }));
   const panel = useAnimatedStyle(() => ({
     transform: [
       {
@@ -172,6 +175,16 @@ export function DiaryCalendar({
       accessibilityViewIsModal
       onAccessibilityEscape={dismiss}
     >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          backdrop,
+          hasDetail && styles.detailBackdrop,
+        ]}
+      >
+        <BlurView tint="light" intensity={65} style={styles.grow} />
+      </Animated.View>
       <Pressable
         accessible={false}
         onPress={dismiss}
@@ -184,7 +197,12 @@ export function DiaryCalendar({
           panel,
         ]}
       >
-        <GlassSurface style={styles.panel}>
+        <View style={[styles.panel, hasDetail && styles.calendarFill]}>
+          {!hasDetail && (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <GlassSurface materialize={0} style={styles.panel} />
+            </View>
+          )}
           <View
             style={styles.viewport}
             pointerEvents={detail ? "none" : "auto"}
@@ -272,19 +290,11 @@ export function DiaryCalendar({
                                   if (day !== selected) void selectionAsync();
                                   setSelected(day);
                                 }}
-                                style={cell}
+                                style={[
+                                  cell,
+                                  day === selected && styles.selected,
+                                ]}
                               >
-                                {day === selected && (
-                                  <View
-                                    pointerEvents="none"
-                                    style={StyleSheet.absoluteFill}
-                                  >
-                                    <GlassSurface
-                                      materialize={0}
-                                      style={styles.selected}
-                                    />
-                                  </View>
-                                )}
                                 {thumbnail && (
                                   <Image
                                     source={{ uri: thumbnail }}
@@ -322,11 +332,17 @@ export function DiaryCalendar({
                         {selected === today ? "Hoje" : fullDate(selected)}
                       </Text>
                       {canOpenDay && (
-                        <GlassButton
-                          name="arrow.right"
+                        <Touch
                           label="Abrir página do dia"
                           onPress={() => onOpenDay(selected)}
-                        />
+                          style={styles.monthButton}
+                        >
+                          <Symbol
+                            name="arrow.right"
+                            size={17}
+                            color={theme.ink}
+                          />
+                        </Touch>
                       )}
                     </View>
                     {entries.length ? (
@@ -377,17 +393,13 @@ export function DiaryCalendar({
               </ScrollView>
             </GestureDetector>
           </View>
-        </GlassSurface>
+        </View>
       </Animated.View>
       {detail && (
-        <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
-          <Animated.View
-            entering={reveal}
-            pointerEvents="none"
-            style={StyleSheet.absoluteFill}
-          >
-            <BlurView tint="light" intensity={55} style={styles.grow} />
-          </Animated.View>
+        <View
+          style={[StyleSheet.absoluteFill, styles.detailOverlay]}
+          accessibilityViewIsModal
+        >
           <Pressable
             accessible={false}
             onPress={closeDetail}
@@ -413,11 +425,13 @@ export function DiaryCalendar({
                 contentContainerStyle={styles.detailContent}
               >
                 <View style={styles.monthRow}>
-                  <GlassButton
-                    name="chevron.left"
+                  <Touch
                     label="Voltar ao calendário"
                     onPress={closeDetail}
-                  />
+                    style={styles.monthButton}
+                  >
+                    <Symbol name="chevron.left" size={17} color={theme.ink} />
+                  </Touch>
                   <Text accessibilityRole="header" style={styles.month}>
                     {fullDate(selected)}
                   </Text>
@@ -435,6 +449,9 @@ export function DiaryCalendar({
 const styles = StyleSheet.create({
   position: { position: "absolute", left: 16, right: 16 },
   grow: { flex: 1 },
+  calendarFill: { backgroundColor: theme.paper },
+  detailBackdrop: { zIndex: 1 },
+  detailOverlay: { zIndex: 2 },
   grabber: {
     alignSelf: "center",
     width: 84,
@@ -488,7 +505,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   compactCell: { minHeight: 40 },
-  selected: { flex: 1, borderRadius: 12 },
+  selected: { backgroundColor: theme.line },
   day: { color: theme.ink, fontSize: 14 },
   today: { fontWeight: "700" },
   thumbnail: { width: 22, height: 22, borderRadius: 5 },

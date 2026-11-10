@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -474,6 +475,7 @@ export function DiaryScreen() {
     id: string;
     props: Omit<ComponentProps<typeof EntryActions>, "onClose">;
   }>();
+  const closeEntryMenu = useCallback(() => setEntryMenu(undefined), []);
   const showComposer = !selection && (writingToday || !!focusSeed);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -545,9 +547,6 @@ export function DiaryScreen() {
             Math.max(0, (height - surfaceHeight.get()) / 2 - insets.bottom - 8),
       },
     ],
-  }));
-  const backdrop = useAnimatedStyle(() => ({
-    opacity: Math.max(0, Math.min(1, calendarProgress.get())),
   }));
   const transcript = useAnimatedStyle(() => ({
     opacity: 1 - Math.max(0, Math.min(1, calendarProgress.get())) * 0.82,
@@ -1233,6 +1232,7 @@ export function DiaryScreen() {
           />
         </Animated.View>
         <ProgressiveBlur
+          singlePass
           edge="top"
           height={insets.top + headerHeight + 18}
           color={theme.paper}
@@ -1417,6 +1417,7 @@ export function DiaryScreen() {
                 style={[StyleSheet.absoluteFill, dockBlur]}
               >
                 <ProgressiveBlur
+                  singlePass
                   edge="bottom"
                   height={
                     insets.bottom +
@@ -1653,6 +1654,7 @@ export function DiaryScreen() {
                   </Pressable>
                 </ScrollView>
                 <ProgressiveBlur
+                  singlePass
                   edge="bottom"
                   height={24}
                   tint="dark"
@@ -1663,26 +1665,18 @@ export function DiaryScreen() {
           </KeyboardStickyView>
         </Animated.View>
         {calendar && (
-          <>
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, backdrop]}
-            >
-              <BlurView tint="light" intensity={65} style={styles.fill} />
-            </Animated.View>
-            <DiaryCalendar
-              index={index}
-              initialDay={activeDay}
-              today={today}
-              progress={calendarProgress}
-              renderEntry={renderEntry}
-              onClose={closeCalendar}
-              onOpenDay={(day) => {
-                openDay(day);
-                closeCalendar();
-              }}
-            />
-          </>
+          <DiaryCalendar
+            index={index}
+            initialDay={activeDay}
+            today={today}
+            progress={calendarProgress}
+            renderEntry={renderEntry}
+            onClose={closeCalendar}
+            onOpenDay={(day) => {
+              openDay(day);
+              closeCalendar();
+            }}
+          />
         )}
         {editing && (
           <Modal
@@ -1861,10 +1855,7 @@ export function DiaryScreen() {
           </Modal>
         )}
         {entryMenu && (
-          <EntryActions
-            {...entryMenu.props}
-            onClose={() => setEntryMenu(undefined)}
-          />
+          <EntryActions {...entryMenu.props} onClose={closeEntryMenu} />
         )}
       </View>
     </GlassThemeProvider>
