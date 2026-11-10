@@ -68,6 +68,7 @@ import {
 } from "expo-image-picker";
 import { selectionAsync } from "expo-haptics";
 import { setStringAsync } from "expo-clipboard";
+import { requireOptionalNativeModule } from "expo";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
 import {
   EntryActions,
@@ -106,6 +107,13 @@ import {
   saveEntry,
   toggleEntryFavorite,
 } from "./storage";
+
+const textRecognition =
+  Platform.OS === "ios"
+    ? requireOptionalNativeModule<{ recognize(uri: string): Promise<string> }>(
+        "CompassoTextRecognition",
+      )
+    : null;
 
 const dateLabel = (day: string) =>
   parseDay(day).toLocaleDateString("pt-BR", { dateStyle: "full" });
@@ -1036,12 +1044,12 @@ export function DiaryScreen() {
 
   async function attachPhoto(
     camera: boolean,
-    target: "composer" | "editor" = "composer",
+    target: "composer" | "editor" | "text" = "composer",
   ) {
     if (busy.current) return;
     busy.current = true;
     setPicking(true);
-    if (target === "composer") showAttachments(false);
+    if (target !== "editor") showAttachments(false);
     else Keyboard.dismiss();
     try {
       if (camera && !(await requestCameraPermissionsAsync()).granted) {
@@ -1058,7 +1066,23 @@ export function DiaryScreen() {
       });
       if (!result.canceled) {
         const uri = result.assets[0]?.uri;
-        if (target === "editor") {
+        if (target === "text") {
+          if (!textRecognition || !uri) return;
+          const recognized = (await textRecognition.recognize(uri)).trim();
+          if (!recognized) {
+            Alert.alert(
+              "Nenhum texto encontrado",
+              "Tire outra foto com o texto bem iluminado e em foco.",
+            );
+            return;
+          }
+          setDraft((current) =>
+            current.trim()
+              ? `${current.trimEnd()}\n\n${recognized}`
+              : recognized,
+          );
+          focusComposer();
+        } else if (target === "editor") {
           setEditing((current) => current && { ...current, photo: uri });
         } else {
           setPhoto(uri);
@@ -1067,9 +1091,11 @@ export function DiaryScreen() {
       }
     } catch {
       Alert.alert(
-        camera
-          ? "Não foi possível abrir a câmera"
-          : "Não foi possível abrir as fotos",
+        target === "text"
+          ? "Não foi possível capturar o texto"
+          : camera
+            ? "Não foi possível abrir a câmera"
+            : "Não foi possível abrir as fotos",
         "Tente novamente.",
       );
     } finally {
@@ -1792,6 +1818,22 @@ export function DiaryScreen() {
                     <Symbol name="camera" size={24} color={theme.onHeavy} />
                     <Text style={styles.trayLabel}>Câmera</Text>
                   </Pressable>
+                  {textRecognition && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Capturar texto pela câmera"
+                      onPress={() => void attachPhoto(true, "text")}
+                      style={styles.attachmentAction}
+                      disabled={picking}
+                    >
+                      <Symbol
+                        name="text.viewfinder"
+                        size={24}
+                        color={theme.onHeavy}
+                      />
+                      <Text style={styles.trayLabel}>Ler texto</Text>
+                    </Pressable>
+                  )}
                 </ScrollView>
                 <ProgressiveBlur
                   singlePass
