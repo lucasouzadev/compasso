@@ -4,8 +4,10 @@ import {
   buttonBorderShape,
   buttonStyle,
   controlSize,
+  disabled as buttonDisabled,
   foregroundStyle,
   frame,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import * as Haptics from "expo-haptics";
 import { Symbol, Touch } from "./Touch";
@@ -22,11 +24,15 @@ export function GlassButton({
   label,
   onPress,
   size = 44,
+  disabled = false,
+  prominent = false,
 }: {
   name: Icon;
   label: string;
   onPress: () => void;
   size?: number;
+  disabled?: boolean;
+  prominent?: boolean;
 }) {
   const theme = useGlassTheme();
   const native = useNativeGlass();
@@ -43,11 +49,13 @@ export function GlassButton({
             onPress();
           }}
           modifiers={[
-            buttonStyle("glass"),
+            buttonStyle(prominent ? "glassProminent" : "glass"),
+            buttonDisabled(disabled),
+            ...(prominent ? [tint(theme.accent)] : []),
             buttonBorderShape("circle"),
             controlSize(size < 44 ? "regular" : "large"),
             accessibilityLabel(label),
-            foregroundStyle(theme.ink),
+            foregroundStyle(prominent ? "#FFFFFF" : theme.ink),
           ]}
         >
           <Image
@@ -59,7 +67,7 @@ export function GlassButton({
       </Host>
     );
   return (
-    <Touch label={label} onPress={onPress} expand>
+    <Touch label={label} onPress={onPress} disabled={disabled} expand>
       <GlassSurface
         style={{
           width: size,
@@ -67,9 +75,15 @@ export function GlassButton({
           borderRadius: size / 2,
           alignItems: "center",
           justifyContent: "center",
+          ...(prominent && { backgroundColor: theme.accent }),
+          ...(disabled && { opacity: 0.4 }),
         }}
       >
-        <Symbol name={name} size={20} color={theme.ink} />
+        <Symbol
+          name={name}
+          size={20}
+          color={prominent ? "#FFFFFF" : theme.ink}
+        />
       </GlassSurface>
     </Touch>
   );

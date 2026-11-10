@@ -43,6 +43,7 @@ import Animated, {
   FadeInRight,
   FadeInDown,
   FadeOut,
+  LinearTransition,
   Easing,
   ReduceMotion,
   useDerivedValue,
@@ -53,7 +54,11 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { BlurView } from "expo-blur";
 import {
   launchCameraAsync,
@@ -115,6 +120,9 @@ const inputMaximum = 116;
 const defaultAttachmentHeight = 300;
 const readingAnchor = { minIndexForVisible: 0, autoscrollToTopThreshold: 24 };
 const reveal = FadeIn.duration(160).reduceMotion(ReduceMotion.System);
+const editorToolbarTransition = LinearTransition.duration(180).reduceMotion(
+  ReduceMotion.System,
+);
 const hideEmpty = FadeOut.duration(150).reduceMotion(ReduceMotion.System);
 const focusEnter = FadeIn.duration(250).reduceMotion(ReduceMotion.System);
 const focusExit = FadeOut.duration(200).reduceMotion(ReduceMotion.System);
@@ -490,6 +498,7 @@ export function DiaryScreen() {
   const [arriving, setArriving] = useState<string>();
   const [newIdeas, setNewIdeas] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(88);
+  const [editorHeaderHeight, setEditorHeaderHeight] = useState(62);
   const [inputHeight, setInputHeight] = useState(inputMinimum);
   const [composerHeight, setComposerHeight] = useState(composerMinimum);
   const [readingHistory, setReadingHistory] = useState(false);
@@ -1707,149 +1716,171 @@ export function DiaryScreen() {
             onShow={() => editorInput.current?.focus()}
             onRequestClose={closeEditor}
           >
-            <SafeAreaProvider style={styles.editorSurface}>
-              <KeyboardAvoidingView
-                automaticOffset
-                behavior="padding"
-                enabled={Platform.OS === "ios"}
-                onAccessibilityEscape={closeEditor}
-                style={styles.fill}
-              >
-                <SafeAreaView
-                  edges={{
-                    top: "maximum",
-                    right: "maximum",
-                    bottom: "maximum",
-                    left: "maximum",
-                  }}
-                  style={styles.editor}
+            <GestureHandlerRootView style={styles.fill}>
+              <SafeAreaProvider style={styles.editorSurface}>
+                <KeyboardAvoidingView
+                  automaticOffset
+                  behavior="padding"
+                  enabled={Platform.OS === "ios"}
+                  onAccessibilityEscape={closeEditor}
+                  style={styles.fill}
                 >
-                  <View style={styles.editorHeader}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Cancelar edição"
-                      onPress={closeEditor}
-                      disabled={saving || picking}
-                      style={[styles.editorButton, styles.editorCancel]}
-                    >
-                      <Symbol name="xmark" size={18} color={theme.ink} />
-                    </Pressable>
-                    <View style={styles.editorHeading}>
-                      <Text
-                        accessibilityRole="header"
-                        style={styles.editorTitle}
-                      >
-                        Editar entrada
-                      </Text>
-                      <Text style={styles.editorDate}>
-                        {new Date(editing.entry.createdAt).toLocaleDateString(
-                          "pt-BR",
-                          {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          },
-                        )}{" "}
-                        · {timeLabel(editing.entry.createdAt)}
-                      </Text>
-                    </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        saving ? "Salvando alterações" : "Salvar alterações"
-                      }
-                      accessibilityState={{ busy: saving }}
-                      onPress={saveEdit}
-                      disabled={editorSaveDisabled}
-                      style={[
-                        styles.editorButton,
-                        styles.editorConfirm,
-                        editorSaveDisabled && styles.disabled,
-                      ]}
-                    >
-                      <Symbol name="checkmark" size={20} color="#FFFFFF" />
-                    </Pressable>
-                  </View>
-                  <ScrollView
-                    keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode="interactive"
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.editorContent}
+                  <SafeAreaView
+                    edges={{
+                      top: "maximum",
+                      right: "maximum",
+                      bottom: "maximum",
+                      left: "maximum",
+                    }}
+                    style={styles.editor}
                   >
-                    <TextInput
-                      ref={editorInput}
-                      accessibilityLabel="Texto da entrada"
-                      placeholder="Escreva para você…"
-                      placeholderTextColor={theme.muted}
-                      selectionColor={interfaceRed}
-                      multiline
-                      editable={!saving && !picking}
-                      value={editing.text}
-                      onChangeText={(text) =>
-                        setEditing((current) => current && { ...current, text })
-                      }
-                      style={[styles.body, styles.editorInput]}
-                    />
-                    {editing.photo && (
-                      <Image
-                        accessibilityLabel="Foto da entrada"
-                        source={{ uri: editing.photo }}
-                        resizeMode="contain"
-                        style={styles.photo}
-                      />
-                    )}
-                  </ScrollView>
-                  <View style={styles.editorToolbar}>
-                    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                      <GlassSurface
-                        materialize={0}
-                        style={styles.editorToolbarGlass}
-                      />
-                    </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        editing.photo ? "Trocar foto" : "Escolher foto"
-                      }
-                      disabled={saving || picking}
-                      onPress={() => void attachPhoto(false, "editor")}
-                      style={styles.editorButton}
-                    >
-                      <Symbol
-                        name="photo.on.rectangle"
-                        size={20}
-                        color={theme.ink}
-                      />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Tirar foto"
-                      disabled={saving || picking}
-                      onPress={() => void attachPhoto(true, "editor")}
-                      style={styles.editorButton}
-                    >
-                      <Symbol name="camera" size={20} color={theme.ink} />
-                    </Pressable>
-                    {editing.photo && (
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Remover foto"
-                        disabled={saving || picking}
-                        onPress={() =>
-                          setEditing(
-                            (current) =>
-                              current && { ...current, photo: undefined },
+                    <View style={styles.editorReadingArea}>
+                      <ScrollView
+                        alwaysBounceVertical={false}
+                        keyboardShouldPersistTaps="handled"
+                        keyboardDismissMode="interactive"
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={[
+                          styles.editorContent,
+                          { paddingTop: editorHeaderHeight + 8 },
+                        ]}
+                      >
+                        <View style={styles.editorCard}>
+                          <TextInput
+                            ref={editorInput}
+                            accessibilityLabel="Texto da entrada"
+                            placeholder="Escreva para você…"
+                            placeholderTextColor={theme.muted}
+                            selectionColor={interfaceRed}
+                            multiline
+                            editable={!saving && !picking}
+                            value={editing.text}
+                            onChangeText={(text) =>
+                              setEditing(
+                                (current) => current && { ...current, text },
+                              )
+                            }
+                            style={[styles.body, styles.editorInput]}
+                          />
+                          {editing.photo && (
+                            <Image
+                              accessibilityLabel="Foto da entrada"
+                              source={{ uri: editing.photo }}
+                              resizeMode="contain"
+                              style={styles.photo}
+                            />
+                          )}
+                        </View>
+                      </ScrollView>
+                      <View
+                        pointerEvents="box-none"
+                        onLayout={({ nativeEvent }) =>
+                          setEditorHeaderHeight(
+                            Math.ceil(nativeEvent.layout.height),
                           )
                         }
-                        style={styles.editorButton}
+                        style={styles.editorHeader}
                       >
-                        <Symbol name="trash" size={18} color={interfaceRed} />
-                      </Pressable>
-                    )}
-                  </View>
-                </SafeAreaView>
-              </KeyboardAvoidingView>
-            </SafeAreaProvider>
+                        <ProgressiveBlur
+                          singlePass
+                          edge="top"
+                          height={editorHeaderHeight + 14}
+                          color={theme.paper}
+                        />
+                        <GlassButton
+                          name="xmark"
+                          label="Cancelar edição"
+                          onPress={closeEditor}
+                          disabled={saving || picking}
+                        />
+                        <View style={styles.editorHeading}>
+                          <Text
+                            accessibilityRole="header"
+                            style={styles.editorTitle}
+                          >
+                            Editar entrada
+                          </Text>
+                          <Text style={styles.editorDate}>
+                            {new Date(
+                              editing.entry.createdAt,
+                            ).toLocaleDateString("pt-BR", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}{" "}
+                            · {timeLabel(editing.entry.createdAt)}
+                          </Text>
+                        </View>
+                        <GlassButton
+                          name="checkmark"
+                          label={
+                            saving ? "Salvando alterações" : "Salvar alterações"
+                          }
+                          onPress={saveEdit}
+                          disabled={editorSaveDisabled}
+                          prominent
+                        />
+                      </View>
+                    </View>
+                    <Animated.View
+                      layout={editorToolbarTransition}
+                      style={styles.editorToolbar}
+                    >
+                      <GlassSurface
+                        interactive
+                        materialize={0}
+                        style={styles.editorToolbarGlass}
+                      >
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            editing.photo ? "Trocar foto" : "Escolher foto"
+                          }
+                          disabled={saving || picking}
+                          onPress={() => void attachPhoto(false, "editor")}
+                          style={styles.editorButton}
+                        >
+                          <Symbol
+                            name="photo.on.rectangle"
+                            size={20}
+                            color={theme.ink}
+                          />
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Tirar foto"
+                          disabled={saving || picking}
+                          onPress={() => void attachPhoto(true, "editor")}
+                          style={styles.editorButton}
+                        >
+                          <Symbol name="camera" size={20} color={theme.ink} />
+                        </Pressable>
+                        {editing.photo && (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Remover foto"
+                            disabled={saving || picking}
+                            onPress={() =>
+                              setEditing(
+                                (current) =>
+                                  current && { ...current, photo: undefined },
+                              )
+                            }
+                            style={styles.editorButton}
+                          >
+                            <Symbol
+                              name="trash"
+                              size={18}
+                              color={interfaceRed}
+                            />
+                          </Pressable>
+                        )}
+                      </GlassSurface>
+                    </Animated.View>
+                  </SafeAreaView>
+                </KeyboardAvoidingView>
+              </SafeAreaProvider>
+            </GestureHandlerRootView>
           </Modal>
         )}
         {original && (
@@ -2009,7 +2040,17 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 12,
   },
-  editorHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  editorReadingArea: { flex: 1 },
+  editorHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingBottom: 10,
+  },
   editorHeading: { flex: 1, alignItems: "center", gap: 3 },
   editorTitle: {
     color: theme.ink,
@@ -2025,31 +2066,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 22,
   },
-  editorCancel: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.line,
-  },
-  editorConfirm: { backgroundColor: interfaceRed },
-  editorContent: { gap: 12, paddingTop: 8, paddingBottom: 12 },
-  editorInput: {
-    height: 160,
-    textAlignVertical: "top",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  editorContent: { paddingBottom: 12 },
+  editorCard: {
+    gap: 10,
+    padding: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#D9C6BD",
     borderRadius: 18,
     borderCurve: "continuous",
     backgroundColor: "#FFFCF8",
   },
-  editorToolbar: {
-    alignSelf: "center",
+  editorInput: { height: 148, textAlignVertical: "top", padding: 2 },
+  editorToolbar: { alignSelf: "center" },
+  editorToolbarGlass: {
     flexDirection: "row",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 2,
+    borderRadius: 24,
   },
-  editorToolbarGlass: { flex: 1, borderRadius: 24 },
   originalLayer: {
     flex: 1,
     justifyContent: "flex-end",
