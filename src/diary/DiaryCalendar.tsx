@@ -20,6 +20,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
+import { BlurView } from "expo-blur";
 import { selectionAsync } from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
@@ -376,40 +377,57 @@ export function DiaryCalendar({
               </ScrollView>
             </GestureDetector>
           </View>
-          {detail && (
-            <View style={styles.detailLayer} accessibilityViewIsModal>
-              <Pressable
-                accessible={false}
-                onPress={closeDetail}
-                style={StyleSheet.absoluteFill}
-              />
-              <Animated.View entering={revealDetail} style={styles.detailSheet}>
-                <GlassSurface style={styles.panel}>
-                  <View style={styles.viewport}>
-                    <ScrollView
-                      style={styles.unclipped}
-                      showsVerticalScrollIndicator={false}
-                      contentContainerStyle={styles.detailContent}
-                    >
-                      <View style={styles.monthRow}>
-                        <GlassButton
-                          name="chevron.left"
-                          label="Voltar ao calendário"
-                          onPress={closeDetail}
-                        />
-                        <Text accessibilityRole="header" style={styles.month}>
-                          {fullDate(selected)}
-                        </Text>
-                      </View>
-                      {renderEntry(detail)}
-                    </ScrollView>
-                  </View>
-                </GlassSurface>
-              </Animated.View>
-            </View>
-          )}
         </GlassSurface>
       </Animated.View>
+      {detail && (
+        <View style={StyleSheet.absoluteFill} accessibilityViewIsModal>
+          <Animated.View
+            entering={reveal}
+            pointerEvents="none"
+            style={StyleSheet.absoluteFill}
+          >
+            <BlurView tint="light" intensity={55} style={styles.grow} />
+          </Animated.View>
+          <Pressable
+            accessible={false}
+            onPress={closeDetail}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View
+            entering={revealDetail}
+            style={[
+              styles.position,
+              {
+                bottom: insets.bottom + 12,
+                height: Math.min(panelHeight, detail.photo ? 420 : 300),
+              },
+            ]}
+          >
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <GlassSurface materialize={0} style={styles.panel} />
+            </View>
+            <View style={styles.viewport}>
+              <ScrollView
+                style={styles.unclipped}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.detailContent}
+              >
+                <View style={styles.monthRow}>
+                  <GlassButton
+                    name="chevron.left"
+                    label="Voltar ao calendário"
+                    onPress={closeDetail}
+                  />
+                  <Text accessibilityRole="header" style={styles.month}>
+                    {fullDate(selected)}
+                  </Text>
+                </View>
+                {renderEntry(detail)}
+              </ScrollView>
+            </View>
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
@@ -446,8 +464,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  detailLayer: { ...StyleSheet.absoluteFill, justifyContent: "flex-end" },
-  detailSheet: { height: "85%" },
   detailContent: { padding: 16, paddingBottom: 24 },
   monthRow: {
     flexDirection: "row",
