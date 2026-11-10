@@ -1,3 +1,4 @@
+import type { DiaryDraft } from "./drafts";
 import {
   useCallback,
   useEffect,
@@ -105,6 +106,9 @@ import {
   readThreadLinks,
   rememberDay,
   saveEntry,
+  draftJournal,
+  keepDraftPhoto,
+  newEntryId,
   toggleEntryFavorite,
 } from "./storage";
 
@@ -114,6 +118,21 @@ const textRecognition =
         "CompassoTextRecognition",
       )
     : null;
+
+function loadDraft() {
+  try {
+    const draft = draftJournal.read();
+    if (draft?.submissionId && readEntry(draft.submissionId)) {
+      return {
+        draft: { ...draft, active: { text: "" }, submissionId: undefined },
+        failed: false,
+      };
+    }
+    return { draft, failed: false };
+  } catch {
+    return { draft: undefined, failed: true };
+  }
+}
 
 const dateLabel = (day: string) =>
   parseDay(day).toLocaleDateString("pt-BR", { dateStyle: "full" });
@@ -571,19 +590,23 @@ export function DiaryScreen() {
   const [historicalDay, setHistoricalDay] = useState<string>();
   const activeDay = historicalDay ?? today;
   const writingToday = activeDay === today;
-  const [draft, setDraft] = useState("");
-  const [photo, setPhoto] = useState<string>();
-  const [previous, setPrevious] = useState<Entry>();
-  const [editing, setEditing] = useState<{
-    entry: Entry;
-    text: string;
-    photo?: string;
-    tags: string;
-  }>();
+  const [recovery] = useState(loadDraft);
+  const [draft, setDraft] = useState(recovery.draft?.active.text ?? "");
+  const [photo, setPhoto] = useState<string | undefined>(
+    recovery.draft?.active.photo,
+  );
+  const [previous, setPrevious] = useState<Entry | undefined>(
+    recovery.draft?.active.previous,
+  );
+  const [editing, setEditing] = useState<DiaryDraft["editing"]>(
+    recovery.draft?.editing,
+  );
   const [original, setOriginal] = useState<Entry>();
   const originalPhoto = original && entryPhotoUri(original);
   const closeOriginal = () => setOriginal(undefined);
-  const [focusSeed, setFocusSeed] = useState<Entry>();
+  const [focusSeed, setFocusSeed] = useState<Entry | undefined>(
+    recovery.draft?.focus,
+  );
   const [threadLinks, setThreadLinks] = useState<Map<string, string>>();
   const [selection, setSelection] = useState<Set<string>>();
   const [entryMenu, setEntryMenu] = useState<{
@@ -688,7 +711,53 @@ export function DiaryScreen() {
     text: string;
     photo?: string;
     previous?: Entry;
-  }>(undefined);
+  }>(recovery.draft?.outside);
+  const submissionId = useRef(recovery.draft?.submissionId);
+  const draftWarning = useRef(false);
+  const draftState = {
+    version: 1 as const,
+    active: { text: draft, photo, previous },
+    outside: outsideFocus.current,
+    focus: focusSeed,
+    editing,
+    submissionId: submissionId.current,
+  };
+  const latestDraft = useRef(draftState);
+  latestDraft.current = draftState;
+
+  const persistDraft = useCallback(() => {
+    if (recovery.failed) return;
+    try {
+      draftJournal.write(latestDraft.current);
+      draftWarning.current = false;
+    } catch {
+      if (!draftWarning.current) {
+        draftWarning.current = true;
+        Alert.alert(
+          "Não foi possível proteger o rascunho",
+          "Mantenha o app aberto e guarde sua entrada para preservar o conteúdo.",
+        );
+      }
+    }
+  }, [recovery.failed]);
+
+  useEffect(() => {
+    submissionId.current = undefined;
+    latestDraft.current.submissionId = undefined;
+    persistDraft();
+  }, [draft, photo, previous, focusSeed, editing, persistDraft]);
+
+  useEffect(() => {
+    if (recovery.failed)
+      Alert.alert(
+        "Não foi possível recuperar o rascunho",
+        "Os registros guardados continuam disponíveis. O rascunho anterior precisa ser recuperado antes de ativar o salvamento automático.",
+      );
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") persistDraft();
+    });
+    return () => subscription.remove();
+  }, [persistDraft, recovery.failed]);
 
   useEffect(() => {
     expandedHeight.set(
@@ -957,9 +1026,29 @@ export function DiaryScreen() {
   }
 
   function closeEditor() {
-    if (busy.current) return;
-    Keyboard.dismiss();
-    setEditing(undefined);
+    if (busy.current || !editing) return;
+    const discard = () => {
+      Keyboard.dismiss();
+      setEditing(undefined);
+    };
+    const changed =
+      editing.text !== editing.entry.text ||
+      editing.photo !== entryPhotoUri(editing.entry) ||
+      editing.tags !== (editing.entry.tags?.join(", ") ?? "");
+    if (changed) {
+      Alert.alert(
+        "Descartar alterações?",
+        "A entrada guardada será preservada.",
+        [
+          { text: "Continuar editando", style: "cancel" },
+          {
+            text: "Descartar alterações",
+            style: "destructive",
+            onPress: discard,
+          },
+        ],
+      );
+    } else discard();
   }
 
   async function saveEdit() {
@@ -1091,11 +1180,16 @@ export function DiaryScreen() {
               : recognized,
           );
           focusComposer();
-        } else if (target === "editor") {
-          setEditing((current) => current && { ...current, photo: uri });
         } else {
-          setPhoto(uri);
-          setKeepComposerOpen(true);
+          const retainedPhoto = uri ? keepDraftPhoto(uri) : undefined;
+          if (target === "editor") {
+            setEditing(
+              (current) => current && { ...current, photo: retainedPhoto },
+            );
+          } else {
+            setPhoto(retainedPhoto);
+            setKeepComposerOpen(true);
+          }
         }
       }
     } catch {
@@ -1128,7 +1222,18 @@ export function DiaryScreen() {
     try {
       showAttachments(false);
       if (!focusSeed) await KeyboardController.dismiss();
-      const entry = await saveEntry(text, photo, previous ?? focusSeed);
+      submissionId.current ??= newEntryId();
+      draftJournal.write({
+        ...latestDraft.current,
+        submissionId: submissionId.current,
+      });
+      const entry = await saveEntry(
+        text,
+        photo,
+        previous ?? focusSeed,
+        submissionId.current,
+      );
+      submissionId.current = undefined;
       setArriving(entry.id);
       if (focusSeed) followThread.current = true;
       else if (!atTop.current) setNewIdeas((count) => count + 1);

@@ -14,7 +14,7 @@ A auditoria de 10/11 identificou sete achados P01–P07 e um inventário de vidr
 
 | Etapa | Entrega | Evidência para encerrar | Estado |
 | --- | --- | --- | --- |
-| 1 | Proteger rascunhos e edições | Rascunho restaurado após encerrar o app; cancelar câmera mantém conteúdo; edição alterada tem saída segura | Pronta para iniciar |
+| 1 | Proteger rascunhos e edições | Rascunho restaurado após encerrar o app; cancelar câmera mantém conteúdo; edição alterada tem saída segura | Validada localmente |
 | 2 | Estabilizar compositor, vidro e menus | Repetir 0:49 e 2:49 do vídeo sem manchas; menu respeita cabeçalho; compositor mantém âncora | Pendente |
 | 3 | Uniformizar materiais e feedback | Bandeja +, Guardar, ferramentas e remoções têm estados legíveis e resposta consistente | Pendente |
 | 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Pendente |
@@ -105,9 +105,12 @@ Aceite: testes verdes, funcionamento offline e comparação antes/depois. Ganhos
 
 ## Registro de continuidade
 
-- Próxima ação — iniciar a etapa 1, protegendo rascunho e saída da edição.
+- Próxima ação — validar a etapa 1 no iPhone e iniciar o diagnóstico de composição da etapa 2.
 - Evidência local da base — npm run verify passou com 20 testes na auditoria de 10/11.
 - Evidência pendente — validação de aparelho dos achados; baseline de performance.
 - Registro por entrega — data, etapa, estado, commit, build/runtime, OTA/EAS, testes e retorno de Juice.
 - Decisões de produto — diário local, uma voz, balões rosa à direita, componentes nativos e comparação de referências antes de mudar a interface.
 - Logo — depende do arquivo de Juice; integração prevista para a identidade visual.
+
+
+Entrega da etapa 1 em 10/11/2026. Proteção de rascunhos, fotos duráveis, restauração de foco/edição, confirmação de descarte e identidade estável na gravação. Verificação local com 23 testes; validação no iPhone pendente.

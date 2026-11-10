@@ -1,3 +1,4 @@
+import { createDraftJournal, type DiaryDraft } from "./drafts";
 import { Directory, File, Paths } from "expo-file-system";
 import {
   deleteAsync,
@@ -7,6 +8,75 @@ import {
 import { entryDayFromId, entrySchema, type Entry } from "./entries";
 
 const root = () => new Directory(Paths.document, "compasso-entries");
+const draftRoot = () => new Directory(Paths.document, "compasso-drafts");
+const journal = createDraftJournal({
+  keys: () =>
+    draftRoot().exists
+      ? draftRoot()
+          .list()
+          .map((file) => file.name)
+      : [],
+  read: (key) => new File(draftRoot(), key).textSync(),
+  write: (key, value) => {
+    draftRoot().create({ idempotent: true });
+    new File(draftRoot(), key).write(value);
+  },
+  publish: (from, to) => new File(draftRoot(), from).rename(to),
+  remove: (key) => new File(draftRoot(), key).delete(),
+});
+
+export const draftJournal = {
+  read: journal.read,
+  write(snapshot: DiaryDraft) {
+    journal.write(snapshot);
+    try {
+      const files = draftRoot().list();
+      const retained = new Set<string>();
+      for (const file of files) {
+        if (file instanceof File && /^draft-\d+\.json$/.test(file.name)) {
+          const draft = JSON.parse(file.textSync()) as DiaryDraft;
+          for (const photo of [
+            draft.active.photo,
+            draft.outside?.photo,
+            draft.editing?.photo,
+          ]) {
+            if (photo) retained.add(photo);
+          }
+        }
+      }
+      for (const file of files) {
+        if (
+          file instanceof File &&
+          file.name.startsWith("image-") &&
+          !retained.has(file.uri)
+        )
+          file.delete();
+      }
+    } catch {
+      // A committed snapshot remains valid if unused-photo cleanup fails.
+    }
+  },
+};
+
+export function keepDraftPhoto(uri: string) {
+  draftRoot().create({ idempotent: true });
+  const source = new File(uri);
+  if (source.uri.startsWith(draftRoot().uri + "/")) return source.uri;
+  const extension = /^\.[a-z0-9]+$/i.test(source.extension)
+    ? source.extension
+    : ".jpg";
+  const copy = new File(
+    draftRoot(),
+    `image-${Date.now()}-${Math.random().toString(36).slice(2)}${extension}`,
+  );
+  source.copy(copy);
+  return copy.uri;
+}
+
+export function newEntryId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 const revisionPattern = /^revision-(\d+)\.json$/;
 
 function latestRevision(directory: Directory) {
@@ -190,11 +260,15 @@ export async function saveEntry(
   text: string,
   photoUri: string | undefined,
   previous: Entry | undefined,
+  requestedId?: string,
 ) {
   const directory = root();
   directory.create({ idempotent: true });
-  const date = new Date();
-  const id = `${date.getTime()}-${Math.random().toString(36).slice(2)}`;
+  const id = requestedId ?? newEntryId();
+  if (!/^\d+-[a-z0-9]+$/.test(id)) throw new Error("Invalid entry identifier");
+  const existing = readEntry(id);
+  if (existing) return existing;
+  const date = new Date(Number(id.split("-")[0]));
   const pending = new Directory(directory, `.${id}`);
   const source = photoUri ? new File(photoUri) : undefined;
   const extension = source?.extension.toLowerCase();
@@ -212,6 +286,7 @@ export async function saveEntry(
   };
 
   try {
+    if (pending.exists) pending.delete();
     pending.create();
     if (source && photo) await source.copy(new File(pending, photo));
     new File(pending, "entry.json").write(JSON.stringify(entry));
