@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Image,
+  Platform,
   FlatList,
   Pressable,
   ScrollView,
@@ -20,6 +21,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
+import { MenuView } from "@expo/ui/community/menu";
 import { BlurView } from "expo-blur";
 import { selectionAsync } from "expo-haptics";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -73,7 +75,7 @@ export function DiaryCalendar({
   const tagEntries =
     loadedTags?.source === index ? loadedTags.entries : undefined;
   useEffect(() => {
-    if ((!showTags && !tag) || tagEntries) return;
+    if ((Platform.OS === "web" && !showTags && !tag) || tagEntries) return;
     const abort = new AbortController();
     void readSearchEntries(index, abort.signal).then(({ entries }) => {
       if (!abort.signal.aborted) setLoadedTags({ source: index, entries });
@@ -298,38 +300,84 @@ export function DiaryCalendar({
                           />
                         </Touch>
                       </View>
-                      <Touch
-                        label={
-                          showTags
-                            ? "Recolher filtros de tags"
-                            : "Filtrar por tag"
-                        }
-                        onPress={() => setShowTags((visible) => !visible)}
-                        style={styles.tagToggle}
-                      >
-                        <Symbol
-                          name="line.3.horizontal.decrease"
-                          size={16}
-                          color={theme.ink}
-                        />
-                        <Text style={styles.tagText}>
-                          {tag ? `#${tag}` : "Filtrar por tag"}
-                        </Text>
-                      </Touch>
-                      {showTags &&
-                        (tags.length > 0 ? (
-                          <DiaryTagFilter
-                            tags={tags}
-                            selected={tag}
-                            onSelect={setTag}
-                          />
-                        ) : (
-                          <Text style={styles.tagText}>
-                            {tagEntries
-                              ? "Nenhuma tag no diário."
-                              : "Carregando tags…"}
-                          </Text>
-                        ))}
+                      {Platform.OS === "web" ? (
+                        <>
+                          <Touch
+                            label="Filtrar por tag"
+                            onPress={() => setShowTags(!showTags)}
+                            style={styles.tagToggle}
+                          >
+                            <Text style={styles.tagText}>
+                              {tag ? `#${tag}` : "Filtrar por tag"}
+                            </Text>
+                          </Touch>
+                          {showTags && (
+                            <DiaryTagFilter
+                              tags={tags}
+                              selected={tag}
+                              onSelect={setTag}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <MenuView
+                          style={styles.tagMenu}
+                          actions={[
+                            {
+                              id: "",
+                              title: "Todas as entradas",
+                              state: tag ? "off" : "on",
+                            },
+                            ...tags.map((value) => ({
+                              id: value,
+                              title: `#${value}`,
+                              state:
+                                value === tag
+                                  ? ("on" as const)
+                                  : ("off" as const),
+                            })),
+                            ...(!tags.length
+                              ? [
+                                  {
+                                    title: tagEntries
+                                      ? "Nenhuma tag no diário"
+                                      : "Carregando tags…",
+                                    attributes: { disabled: true },
+                                  },
+                                ]
+                              : []),
+                          ]}
+                          onPressAction={({ nativeEvent }) => {
+                            setTag(nativeEvent.event || undefined);
+                            void selectionAsync();
+                          }}
+                        >
+                          <View
+                            style={styles.tagToggle}
+                            accessible
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              tag
+                                ? `Filtrar por tag, #${tag}`
+                                : "Filtrar por tag"
+                            }
+                          >
+                            <Symbol
+                              name="line.3.horizontal.decrease"
+                              size={13}
+                              color={theme.muted}
+                            />
+                            <Text numberOfLines={1} style={styles.tagText}>
+                              {tag ? `#${tag}` : "Filtrar por tag"}
+                            </Text>
+                            <Symbol
+                              name="chevron.down"
+                              size={10}
+                              color={theme.muted}
+                            />
+                          </View>
+                        </MenuView>
+                      )}
                       <View style={styles.row}>
                         {weekdays.map((day, index) => (
                           <Text key={index} style={styles.weekday}>
@@ -544,13 +592,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   unclipped: { overflow: "visible" },
+  tagMenu: { alignSelf: "flex-start", maxWidth: "100%", marginTop: -8 },
   tagToggle: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     minHeight: 44,
   },
-  tagText: { color: theme.muted, fontSize: 13 },
+  tagText: { flexShrink: 1, color: theme.muted, fontSize: 13 },
   monthHeader: { minHeight: 54 },
   monthButton: {
     width: 44,

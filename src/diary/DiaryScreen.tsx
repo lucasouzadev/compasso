@@ -174,6 +174,7 @@ function BubbleShape({ width, height }: { width: number; height: number }) {
 }
 
 function EntryCard({
+  allowSwipe = true,
   entry,
   previous,
   onContinue,
@@ -188,6 +189,7 @@ function EntryCard({
   onOpenMenu,
 }: {
   entry: Entry;
+  allowSwipe?: boolean;
   previous?: Entry;
   onContinue: () => void;
   onOpenOriginal: (entry: Entry) => void;
@@ -353,6 +355,7 @@ function EntryCard({
     transform: [{ scale: 0.65 + 0.35 * Math.min(1, -swipe.get() / 52) }],
   }));
   const pullReply = Gesture.Pan()
+    .enabled(allowSwipe)
     .activeOffsetX(-14)
     .failOffsetY([-12, 12])
     .onStart(() => armed.set(false))
@@ -507,16 +510,18 @@ function EntryCard({
       </View>
       {selected === undefined ? (
         <>
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.swipeHint, replyHint]}
-          >
-            <Symbol
-              name="arrowshape.turn.up.left.fill"
-              size={21}
-              color={interfaceRed}
-            />
-          </Animated.View>
+          {allowSwipe && (
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.swipeHint, replyHint]}
+            >
+              <Symbol
+                name="arrowshape.turn.up.left.fill"
+                size={21}
+                color={interfaceRed}
+              />
+            </Animated.View>
+          )}
           <GestureDetector gesture={gestures}>{bubble}</GestureDetector>
         </>
       ) : (
@@ -1267,10 +1272,11 @@ export function DiaryScreen() {
     );
   }, [attachmentsOpen, calendar, composerFocused, emptyCenter, emptyToday]);
 
-  const renderEntry = (entry: Entry) => (
+  const renderEntry = (entry: Entry, allowSwipe = true) => (
     <EntryCard
       key={entry.id}
       entry={entry}
+      allowSwipe={allowSwipe}
       previous={quotedSource(entry.continuationOf)}
       selected={selection?.has(entry.id)}
       menuActive={entryMenu?.id === entry.id}
@@ -1482,7 +1488,7 @@ export function DiaryScreen() {
                 <Animated.View
                   entering={item.id === arriving ? focusArrival : undefined}
                 >
-                  {renderEntry(item)}
+                  {renderEntry(item, false)}
                 </Animated.View>
               )}
               renderScrollComponent={(props) => (

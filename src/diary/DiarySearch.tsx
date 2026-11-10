@@ -17,7 +17,14 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useReducedMotion } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  withTiming,
+} from "react-native-reanimated";
 import { dayKey, parseDay } from "../cookbooks/zest/data/diary";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
@@ -34,6 +41,9 @@ import {
 } from "./entries";
 import { DiaryTagFilter } from "./DiaryTagFilter";
 import { entryPhotoUri, readSearchEntries } from "./storage";
+
+const appear = FadeInDown.duration(180).reduceMotion(ReduceMotion.System);
+const fade = FadeIn.duration(160).reduceMotion(ReduceMotion.System);
 
 const dateLabel = (day: string) =>
   parseDay(day).toLocaleDateString("pt-BR", { dateStyle: "long" });
@@ -53,6 +63,12 @@ export function DiarySearch({
   const input = useRef<TextInputInstance>(null);
   const [query, setQuery] = useState("");
   const [favorites, setFavorites] = useState(false);
+  const indicator = useAnimatedStyle(() => ({
+    left: withTiming(favorites ? "50%" : "0%", {
+      duration: 180,
+      reduceMotion: ReduceMotion.System,
+    }),
+  }));
   const [tag, setTag] = useState<string>();
   const [selected, setSelected] = useState<Entry>();
   const [loaded, setLoaded] = useState<{
@@ -177,26 +193,35 @@ export function DiarySearch({
                     selected ? "no-hide-descendants" : "auto"
                   }
                 >
-                  <View style={styles.tabs}>
+                  <GlassSurface style={styles.tabs} materialize={0}>
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[styles.tabIndicator, indicator]}
+                    />
                     {[false, true].map((value) => (
                       <Pressable
                         key={String(value)}
                         accessibilityRole="tab"
                         accessibilityState={{ selected: favorites === value }}
                         onPress={() => setFavorites(value)}
-                        style={[
-                          styles.tab,
-                          favorites === value && {
-                            backgroundColor: theme.line,
-                          },
-                        ]}
+                        style={styles.tab}
                       >
-                        <Text style={{ color: theme.ink }}>
+                        <Text
+                          style={[
+                            styles.tabLabel,
+                            {
+                              color:
+                                favorites === value
+                                  ? theme.accent
+                                  : theme.muted,
+                            },
+                          ]}
+                        >
                           {value ? "Favoritos" : "Buscar"}
                         </Text>
                       </Pressable>
                     ))}
-                  </View>
+                  </GlassSurface>
                   {tags.length > 0 && (
                     <DiaryTagFilter
                       tags={tags}
@@ -250,7 +275,10 @@ export function DiarySearch({
                       keyboardShouldPersistTaps="handled"
                       keyboardDismissMode="interactive"
                       stickySectionHeadersEnabled={false}
-                      contentContainerStyle={styles.results}
+                      contentContainerStyle={[
+                        styles.results,
+                        !sections.length && styles.emptyResults,
+                      ]}
                       ListEmptyComponent={
                         (hasQuery || favorites || !!tag) && !ready ? (
                           <ActivityIndicator
@@ -258,9 +286,39 @@ export function DiarySearch({
                             color={theme.accent}
                           />
                         ) : (
-                          <Text style={[styles.empty, { color: theme.muted }]}>
-                            {emptyText}
-                          </Text>
+                          <Animated.View
+                            entering={appear}
+                            key={emptyText}
+                            style={styles.emptyState}
+                          >
+                            <View
+                              accessible={false}
+                              style={styles.illustration}
+                            >
+                              <View style={styles.illustrationPage} />
+                              <Symbol
+                                name={
+                                  favorites ? "bookmark" : "magnifyingglass"
+                                }
+                                size={30}
+                                color={theme.accent}
+                              />
+                            </View>
+                            <Text
+                              style={[styles.emptyTitle, { color: theme.ink }]}
+                            >
+                              {favorites && !hasQuery && !tag
+                                ? "Seus favoritos"
+                                : hasQuery || tag
+                                  ? "Sem resultados"
+                                  : "Reencontre um pensamento"}
+                            </Text>
+                            <Text
+                              style={[styles.empty, { color: theme.muted }]}
+                            >
+                              {emptyText}
+                            </Text>
+                          </Animated.View>
                         )
                       }
                       ListFooterComponent={
@@ -281,37 +339,54 @@ export function DiarySearch({
                         </Text>
                       )}
                       renderItem={({ item }) => (
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => {
-                            Keyboard.dismiss();
-                            setSelected(item);
-                          }}
-                          style={({ pressed }) => [
-                            styles.result,
-                            {
-                              borderBottomColor: theme.line,
-                              opacity: pressed ? 0.65 : 1,
-                            },
-                          ]}
-                        >
-                          <View style={styles.fill}>
-                            <Text style={[styles.time, { color: theme.muted }]}>
-                              {entryTime(item)}
-                            </Text>
-                            <Text
-                              numberOfLines={3}
-                              style={[styles.excerpt, { color: theme.ink }]}
-                            >
-                              {item.text || "Foto"}
-                            </Text>
-                          </View>
-                          <Symbol
-                            name="chevron.right"
-                            size={13}
-                            color={theme.muted}
-                          />
-                        </Pressable>
+                        <Animated.View entering={fade}>
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => {
+                              Keyboard.dismiss();
+                              setSelected(item);
+                            }}
+                            style={({ pressed }) => [
+                              styles.result,
+                              {
+                                borderColor: theme.line,
+                                opacity: pressed ? 0.65 : 1,
+                              },
+                            ]}
+                          >
+                            <View style={styles.resultIcon}>
+                              <Symbol
+                                name={
+                                  item.favorite
+                                    ? "bookmark.fill"
+                                    : item.photo
+                                      ? "photo"
+                                      : "text.alignleft"
+                                }
+                                size={17}
+                                color={theme.accent}
+                              />
+                            </View>
+                            <View style={styles.fill}>
+                              <Text
+                                style={[styles.time, { color: theme.muted }]}
+                              >
+                                {entryTime(item)}
+                              </Text>
+                              <Text
+                                numberOfLines={2}
+                                style={[styles.excerpt, { color: theme.ink }]}
+                              >
+                                {item.text || "Foto"}
+                              </Text>
+                            </View>
+                            <Symbol
+                              name="chevron.right"
+                              size={13}
+                              color={theme.muted}
+                            />
+                          </Pressable>
+                        </Animated.View>
                       )}
                     />
                     <ProgressiveBlur
@@ -373,14 +448,22 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerSpacer: { width: 44 },
   title: { flex: 1, fontSize: 19, fontWeight: "600", textAlign: "center" },
-  tabs: { flexDirection: "row", gap: 8, marginBottom: 4 },
+  tabs: { flexDirection: "row", borderRadius: 22 },
+  tabIndicator: {
+    position: "absolute",
+    width: "50%",
+    top: 5,
+    bottom: 5,
+    borderRadius: 18,
+    backgroundColor: "#F2DAD3A6",
+  },
   tab: {
     flex: 1,
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 22,
   },
+  tabLabel: { fontSize: 14, fontWeight: "600" },
   searchDock: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 1 },
   searchField: {
     flexDirection: "row",
@@ -398,12 +481,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  emptyResults: { flexGrow: 1, justifyContent: "center" },
+  emptyState: {
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: "600", textAlign: "center" },
+  illustration: {
+    width: 62,
+    height: 62,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  illustrationPage: {
+    position: "absolute",
+    width: 45,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: "#F3DDD5",
+    transform: [{ rotate: "-12deg" }],
+  },
   results: { paddingTop: 18, paddingBottom: 60 },
   empty: {
     fontSize: 14,
     lineHeight: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 14,
+    textAlign: "center",
+    maxWidth: 260,
   },
   day: { fontSize: 13, fontWeight: "600", paddingTop: 16, paddingBottom: 5 },
   result: {
@@ -411,8 +516,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+    borderRadius: 17,
+    backgroundColor: "#FFFCF8",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  resultIcon: {
+    width: 33,
+    height: 33,
+    borderRadius: 11,
+    backgroundColor: "#F7E5DF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   time: { fontSize: 12, marginBottom: 4 },
   excerpt: { fontSize: 16, lineHeight: 22 },
