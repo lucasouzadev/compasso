@@ -12,6 +12,8 @@ import {
   BackHandler,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -144,6 +146,7 @@ function EntryCard({
   entry,
   previous,
   onContinue,
+  onOpenOriginal,
   onEdit,
   selected,
   onToggle,
@@ -155,6 +158,7 @@ function EntryCard({
   entry: Entry;
   previous?: Entry;
   onContinue: () => void;
+  onOpenOriginal: (entry: Entry) => void;
   onEdit: () => void;
   selected?: boolean;
   onToggle: () => void;
@@ -288,6 +292,10 @@ function EntryCard({
     pullReply,
     Platform.OS === "ios" ? holdAndDrag : longPress,
   );
+  const openOriginal =
+    previous && selected === undefined
+      ? () => onOpenOriginal(previous)
+      : undefined;
   const missingSource = !!entry.continuationOf && !previous;
   const quote = missingSource
     ? "Entrada excluída ou indisponível"
@@ -312,7 +320,12 @@ function EntryCard({
         />
       )}
       {(previous || quote !== undefined || quoteUri) && (
-        <View style={[styles.quote, styles.quotedEntry]}>
+        <Pressable
+          accessible={false}
+          disabled={!openOriginal}
+          onPress={openOriginal}
+          style={[styles.quote, styles.quotedEntry]}
+        >
           {quoteUri && (
             <Image
               accessibilityLabel="Foto citada"
@@ -330,7 +343,10 @@ function EntryCard({
               {quote || (quoteUri ? "Foto" : "Foto da entrada anterior")}
             </Text>
           </View>
-        </View>
+          {openOriginal && (
+            <Symbol name="chevron.right" size={12} color={theme.muted} />
+          )}
+        </Pressable>
       )}
       {entry.reaction && <Text style={styles.reaction}>{entry.reaction}</Text>}
     </>
@@ -342,10 +358,19 @@ function EntryCard({
       accessible={selected === undefined}
       accessibilityActions={
         selected === undefined
-          ? [{ name: "menu", label: "Ações da entrada" }]
+          ? [
+              { name: "menu", label: "Ações da entrada" },
+              ...(openOriginal
+                ? [{ name: "original", label: "Ver entrada original" }]
+                : []),
+            ]
           : undefined
       }
-      onAccessibilityAction={() => {
+      onAccessibilityAction={({ nativeEvent }) => {
+        if (nativeEvent.actionName === "original") {
+          openOriginal?.();
+          return;
+        }
         pointer.set({ x: 0, y: 0, phase: "idle" });
         bubbleRef.current?.measureInWindow((x, y, width, height) =>
           openActions({ x, y, width, height }),
@@ -434,7 +459,14 @@ export function DiaryScreen() {
   const [draft, setDraft] = useState("");
   const [photo, setPhoto] = useState<string>();
   const [previous, setPrevious] = useState<Entry>();
-  const [editing, setEditing] = useState<Entry>();
+  const [editing, setEditing] = useState<{
+    entry: Entry;
+    text: string;
+    photo?: string;
+  }>();
+  const [original, setOriginal] = useState<Entry>();
+  const originalPhoto = original && entryPhotoUri(original);
+  const closeOriginal = () => setOriginal(undefined);
   const [focusSeed, setFocusSeed] = useState<Entry>();
   const [threadLinks, setThreadLinks] = useState<Map<string, string>>();
   const [selection, setSelection] = useState<Set<string>>();
@@ -442,7 +474,7 @@ export function DiaryScreen() {
     id: string;
     props: Omit<ComponentProps<typeof EntryActions>, "onClose">;
   }>();
-  const showComposer = !selection && (writingToday || !!editing || !!focusSeed);
+  const showComposer = !selection && (writingToday || !!focusSeed);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -460,7 +492,6 @@ export function DiaryScreen() {
     !keepComposerOpen &&
     !composerFocused &&
     !focusSeed &&
-    !editing &&
     !attachmentsOpen &&
     !saving &&
     !picking;
@@ -536,11 +567,6 @@ export function DiaryScreen() {
   const keyboardHandoff = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const stashedDraft = useRef<{
-    text: string;
-    photo?: string;
-    previous?: Entry;
-  }>(undefined);
   const outsideFocus = useRef<{
     text: string;
     photo?: string;
@@ -698,7 +724,6 @@ export function DiaryScreen() {
   function leaveFocus() {
     const saved = outsideFocus.current;
     outsideFocus.current = undefined;
-    stashedDraft.current = undefined;
     showAttachments(false);
     Keyboard.dismiss();
     setFocusSeed(undefined);
@@ -803,30 +828,41 @@ export function DiaryScreen() {
     }
   }
 
-  function restoreDraft() {
-    const stashed = stashedDraft.current;
-    stashedDraft.current = undefined;
-    setEditing(undefined);
-    setDraft(stashed?.text ?? "");
-    setPhoto(stashed?.photo);
-    setPrevious(stashed?.previous);
+  function startEditing(entry: Entry) {
+    if (busy.current || editing) return;
+    Keyboard.dismiss();
+    setEditing({ entry, text: entry.text, photo: entryPhotoUri(entry) });
   }
 
-  function startEditing(entry: Entry) {
-    if (busy.current || editing?.id === entry.id) return;
-    if (!editing) stashedDraft.current = { text: draft, photo, previous };
-    else if (draft !== editing.text || photo !== entryPhotoUri(editing)) {
+  function closeEditor() {
+    if (busy.current) return;
+    Keyboard.dismiss();
+    setEditing(undefined);
+  }
+
+  async function saveEdit() {
+    if (busy.current || !editing || status !== "ready") return;
+    const text = editing.text.trim();
+    if (!text && !editing.photo) return;
+
+    busy.current = true;
+    setSaving(true);
+    try {
+      const updated = await editEntry(editing.entry, text, editing.photo);
+      setJournal((current) => ({ ...current, index: new Map(current.index) }));
+      setThreadLinks((links) => links && new Map(links));
+      setFocusSeed((seed) => (seed?.id === updated.id ? updated : seed));
+      Keyboard.dismiss();
+      setEditing(undefined);
+    } catch {
       Alert.alert(
-        "Edição em andamento",
-        "Guarde ou cancele a edição atual antes de editar outra entrada.",
+        "Não foi possível salvar as alterações",
+        "As alterações continuam no editor. Tente novamente.",
       );
-      return;
+    } finally {
+      busy.current = false;
+      setSaving(false);
     }
-    setEditing(entry);
-    setDraft(entry.text);
-    setPhoto(entryPhotoUri(entry));
-    setPrevious(undefined);
-    focusComposer();
   }
 
   function showAttachments(open: boolean) {
@@ -888,11 +924,15 @@ export function DiaryScreen() {
     keyboardHandoff.current = setTimeout(() => showAttachments(false), 700);
   }
 
-  async function attachPhoto(camera: boolean) {
+  async function attachPhoto(
+    camera: boolean,
+    target: "composer" | "editor" = "composer",
+  ) {
     if (busy.current) return;
     busy.current = true;
     setPicking(true);
-    showAttachments(false);
+    if (target === "composer") showAttachments(false);
+    else Keyboard.dismiss();
     try {
       if (camera && !(await requestCameraPermissionsAsync()).granted) {
         Alert.alert(
@@ -907,8 +947,13 @@ export function DiaryScreen() {
         quality: 0.85,
       });
       if (!result.canceled) {
-        setPhoto(result.assets[0]?.uri);
-        setKeepComposerOpen(true);
+        const uri = result.assets[0]?.uri;
+        if (target === "editor") {
+          setEditing((current) => current && { ...current, photo: uri });
+        } else {
+          setPhoto(uri);
+          setKeepComposerOpen(true);
+        }
       }
     } catch {
       Alert.alert(
@@ -928,7 +973,8 @@ export function DiaryScreen() {
     if (
       busy.current ||
       status !== "ready" ||
-      (!writingToday && !editing && !focusSeed) ||
+      !!editing ||
+      (!writingToday && !focusSeed) ||
       (!text && !photo)
     )
       return;
@@ -936,34 +982,27 @@ export function DiaryScreen() {
     setSaving(true);
     try {
       showAttachments(false);
-      if (!focusSeed || editing) await KeyboardController.dismiss();
-      const entry = editing
-        ? await editEntry(editing, text, photo)
-        : await saveEntry(text, photo, previous ?? focusSeed);
-      if (!editing) {
-        setArriving(entry.id);
-        if (focusSeed) followThread.current = true;
-        else if (!atTop.current) setNewIdeas((count) => count + 1);
-        if (entry.continuationOf) {
-          const parent = entry.continuationOf;
-          setThreadLinks((links) =>
-            links ? new Map(links).set(entry.id, parent) : links,
-          );
-        }
-      } else if (focusSeed) {
-        setThreadLinks((links) => links && new Map(links));
+      if (!focusSeed) await KeyboardController.dismiss();
+      const entry = await saveEntry(text, photo, previous ?? focusSeed);
+      setArriving(entry.id);
+      if (focusSeed) followThread.current = true;
+      else if (!atTop.current) setNewIdeas((count) => count + 1);
+      if (entry.continuationOf) {
+        const parent = entry.continuationOf;
+        setThreadLinks((links) =>
+          links ? new Map(links).set(entry.id, parent) : links,
+        );
       }
       setJournal((current) => {
         const updated = new Map(current.index);
         const day = dayKey(new Date(entry.createdAt));
-        if (!editing) updated.set(day, [entry.id, ...(updated.get(day) ?? [])]);
+        updated.set(day, [entry.id, ...(updated.get(day) ?? [])]);
         return { ...current, index: updated };
       });
       setToday(dayKey());
-      if (focusSeed && !editing) {
-        setDraft("");
-        setPhoto(undefined);
-      } else restoreDraft();
+      setDraft("");
+      setPhoto(undefined);
+      if (!focusSeed) setPrevious(undefined);
     } catch {
       Alert.alert(
         "Não foi possível guardar",
@@ -1070,24 +1109,11 @@ export function DiaryScreen() {
   useEffect(() => {
     emptyCenter.set(
       withTiming(
-        emptyToday &&
-          !composerFocused &&
-          !attachmentsOpen &&
-          !editing &&
-          !calendar
-          ? 1
-          : 0,
+        emptyToday && !composerFocused && !attachmentsOpen && !calendar ? 1 : 0,
         { duration: 250, reduceMotion: ReduceMotion.System },
       ),
     );
-  }, [
-    attachmentsOpen,
-    calendar,
-    composerFocused,
-    editing,
-    emptyCenter,
-    emptyToday,
-  ]);
+  }, [attachmentsOpen, calendar, composerFocused, emptyCenter, emptyToday]);
 
   const renderEntry = (entry: Entry) => (
     <EntryCard
@@ -1107,10 +1133,20 @@ export function DiaryScreen() {
       }
       onDelete={() => startSelection(entry)}
       onReact={(emoji) => react(entry, emoji)}
+      onOpenOriginal={(source) => {
+        void selectionAsync();
+        Keyboard.dismiss();
+        setOriginal(source);
+      }}
       onEdit={() => startEditing(entry)}
       onContinue={() => continueThought(entry)}
     />
   );
+  const editorSaveDisabled =
+    saving ||
+    picking ||
+    status !== "ready" ||
+    (!editing?.text.trim() && !editing?.photo);
   const disabled =
     status !== "ready" || saving || picking || (!draft.trim() && !photo);
 
@@ -1133,7 +1169,7 @@ export function DiaryScreen() {
                 {...props}
                 offset={insets.bottom}
                 extraContentPadding={readingInset}
-                freeze={focused}
+                freeze={focused || !!editing}
                 keyboardLiftBehavior="never"
               />
             )}
@@ -1288,6 +1324,7 @@ export function DiaryScreen() {
                   {...props}
                   offset={insets.bottom}
                   extraContentPadding={readingInset}
+                  freeze={!!editing}
                   keyboardLiftBehavior="never"
                 />
               )}
@@ -1435,25 +1472,6 @@ export function DiaryScreen() {
                     setComposerHeight(height);
                   }}
                 >
-                  {editing && (
-                    <Animated.View entering={reveal} style={styles.replyBanner}>
-                      <View style={styles.replyCopy}>
-                        <Text style={styles.replyLabel}>Editando entrada</Text>
-                        <Text style={styles.replyExcerpt}>
-                          {timeLabel(editing.createdAt)}
-                        </Text>
-                      </View>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={"Cancelar edição"}
-                        onPress={restoreDraft}
-                        disabled={saving || picking}
-                        style={styles.dismiss}
-                      >
-                        <Symbol name="xmark" size={14} color={theme.muted} />
-                      </Pressable>
-                    </Animated.View>
-                  )}
                   <View>
                     {/* Fabric reports the input's content size during layout. Measuring
                       the draft separately lets a fixed-height input request more room. */}
@@ -1563,11 +1581,7 @@ export function DiaryScreen() {
                       style={[styles.save, disabled && styles.disabled]}
                     >
                       <Text style={styles.saveLabel}>
-                        {saving
-                          ? "Guardando…"
-                          : editing
-                            ? "Salvar alterações"
-                            : "Guardar"}
+                        {saving ? "Guardando…" : "Guardar"}
                       </Text>
                     </Pressable>
                   </View>
@@ -1670,6 +1684,182 @@ export function DiaryScreen() {
             />
           </>
         )}
+        {editing && (
+          <Modal
+            animationType={reducedMotion ? "none" : "slide"}
+            onRequestClose={closeEditor}
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              onAccessibilityEscape={closeEditor}
+              style={[
+                styles.editor,
+                {
+                  paddingTop: insets.top + 12,
+                  paddingBottom: insets.bottom + 12,
+                },
+              ]}
+            >
+              <View style={styles.originalHeader}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancelar edição"
+                  onPress={closeEditor}
+                  disabled={saving || picking}
+                  style={styles.originalClose}
+                >
+                  <Symbol name="xmark" size={17} color={theme.ink} />
+                </Pressable>
+                <View style={styles.heading}>
+                  <Text accessibilityRole="header" style={styles.focusTitle}>
+                    Editar entrada
+                  </Text>
+                  <Text style={styles.muted}>
+                    {dateLabel(dayKey(new Date(editing.entry.createdAt)))} ·{" "}
+                    {timeLabel(editing.entry.createdAt)}
+                  </Text>
+                </View>
+              </View>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                contentContainerStyle={styles.editorContent}
+              >
+                <TextInput
+                  accessibilityLabel="Texto da entrada"
+                  placeholder="Escreva para você…"
+                  placeholderTextColor={theme.muted}
+                  multiline
+                  scrollEnabled={false}
+                  editable={!saving && !picking}
+                  value={editing.text}
+                  onChangeText={(text) =>
+                    setEditing((current) => current && { ...current, text })
+                  }
+                  style={[styles.body, styles.editorInput]}
+                />
+                {editing.photo && (
+                  <View>
+                    <Image
+                      accessibilityLabel="Foto da entrada"
+                      source={{ uri: editing.photo }}
+                      resizeMode="contain"
+                      style={styles.photo}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Remover foto"
+                      disabled={saving || picking}
+                      onPress={() =>
+                        setEditing(
+                          (current) =>
+                            current && { ...current, photo: undefined },
+                        )
+                      }
+                      style={styles.originalClose}
+                    >
+                      <Symbol name="trash" size={17} color={theme.ink} />
+                    </Pressable>
+                  </View>
+                )}
+              </ScrollView>
+              <View style={styles.originalHeader}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Escolher foto"
+                  disabled={saving || picking}
+                  onPress={() => void attachPhoto(false, "editor")}
+                  style={styles.originalClose}
+                >
+                  <Symbol
+                    name="photo.on.rectangle"
+                    size={21}
+                    color={theme.ink}
+                  />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tirar foto"
+                  disabled={saving || picking}
+                  onPress={() => void attachPhoto(true, "editor")}
+                  style={styles.originalClose}
+                >
+                  <Symbol name="camera" size={21} color={theme.ink} />
+                </Pressable>
+                <View style={styles.heading} />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={saveEdit}
+                  disabled={editorSaveDisabled}
+                  style={[styles.save, editorSaveDisabled && styles.disabled]}
+                >
+                  <Text style={styles.saveLabel}>
+                    {saving ? "Salvando…" : "Salvar alterações"}
+                  </Text>
+                </Pressable>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
+        )}
+        {original && (
+          <Modal
+            transparent
+            animationType={reducedMotion ? "none" : "fade"}
+            onRequestClose={closeOriginal}
+          >
+            <View
+              accessibilityViewIsModal
+              onAccessibilityEscape={closeOriginal}
+              style={[
+                styles.originalLayer,
+                { paddingBottom: insets.bottom + 16 },
+              ]}
+            >
+              <Pressable
+                accessible={false}
+                onPress={closeOriginal}
+                style={StyleSheet.absoluteFill}
+              />
+              <GlassSurface style={styles.originalSheet}>
+                <View style={styles.originalHeader}>
+                  <View style={styles.heading}>
+                    <Text accessibilityRole="header" style={styles.focusTitle}>
+                      Entrada original
+                    </Text>
+                    <Text style={styles.muted}>
+                      {dateLabel(dayKey(new Date(original.createdAt)))} ·{" "}
+                      {timeLabel(original.createdAt)}
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Voltar à leitura"
+                    onPress={closeOriginal}
+                    style={styles.originalClose}
+                  >
+                    <Symbol name="xmark" size={17} color={theme.ink} />
+                  </Pressable>
+                </View>
+                <ScrollView
+                  style={styles.originalContent}
+                  contentContainerStyle={styles.originalBody}
+                >
+                  {!!original.text && (
+                    <Text style={styles.body}>{original.text}</Text>
+                  )}
+                  {!!originalPhoto && (
+                    <Image
+                      accessibilityLabel="Foto da entrada original"
+                      source={{ uri: originalPhoto }}
+                      resizeMode="contain"
+                      style={styles.photo}
+                    />
+                  )}
+                </ScrollView>
+              </GlassSurface>
+            </View>
+          </Modal>
+        )}
         {entryMenu && (
           <EntryActions
             {...entryMenu.props}
@@ -1763,6 +1953,30 @@ const styles = StyleSheet.create({
   },
   hiddenBubble: { opacity: 0 },
   mediaEntry: { width: "100%", maxWidth: 320 },
+  editor: {
+    flex: 1,
+    gap: 12,
+    paddingHorizontal: 20,
+    backgroundColor: theme.paper,
+  },
+  editorContent: { gap: 16, paddingBottom: 16 },
+  editorInput: { minHeight: 120, textAlignVertical: "top", paddingVertical: 8 },
+  originalLayer: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    backgroundColor: "#211D1B33",
+  },
+  originalSheet: { maxHeight: "78%", borderRadius: 32, padding: 18, gap: 14 },
+  originalHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  originalClose: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  originalContent: { flexGrow: 0, flexShrink: 1 },
+  originalBody: { gap: 12 },
   quotedEntry: { flexDirection: "row", alignItems: "center", gap: 8 },
   quoteThumbnail: {
     width: 42,
