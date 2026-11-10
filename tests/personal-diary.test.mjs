@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   entryDayFromId,
   entrySchema,
+  normalizeDiarySearch,
   quotedEntryText,
   threadEntryIds,
 } from "../src/diary/entries.ts";
@@ -78,4 +79,10 @@ test("editing an entry preserves both legacy quotes and newer snapshots", () => 
     quotedEntryText({ ...legacy, quotedText: "Segunda versão" }, entry),
     "Segunda versão",
   );
+});
+
+test("diary search folds case, accents and whitespace for Portuguese text", () => {
+  assert.equal(normalizeDiarySearch("  MANHÃ\n  de AÇÃO  "), "manha de acao");
+  assert.equal(normalizeDiarySearch("café".normalize("NFD")), "cafe");
+  assert.equal(normalizeDiarySearch(" \n "), "");
 });

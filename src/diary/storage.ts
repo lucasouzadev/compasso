@@ -87,6 +87,34 @@ export function readDay(ids: readonly string[]) {
     );
 }
 
+export async function readSearchEntries(
+  index: ReadonlyMap<string, readonly string[]>,
+  signal: AbortSignal,
+) {
+  const entries: Entry[] = [];
+  let skipped = 0;
+  for (const ids of index.values()) {
+    for (const id of ids) {
+      if (signal.aborted) return { entries, skipped };
+      try {
+        const file = entryFile(id);
+        if (!file) {
+          skipped++;
+          continue;
+        }
+        entries.push(entrySchema.parse(JSON.parse(await file.text())));
+      } catch {
+        skipped++;
+      }
+    }
+  }
+  entries.sort(
+    (a, b) =>
+      b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+  );
+  return { entries, skipped };
+}
+
 export async function readThreadLinks(
   ids: Iterable<string>,
   signal: AbortSignal,

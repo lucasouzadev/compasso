@@ -20,6 +20,15 @@ export function quotedEntryText(entry: Entry, previous?: Entry) {
   return entry.quotedText ?? previous?.originalText ?? previous?.text;
 }
 
+export function normalizeDiarySearch(text: string) {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 export function entryDayFromId(id: string) {
   const match = /^(\d+)-[a-z0-9]*$/.exec(id);
   if (!match) return undefined;

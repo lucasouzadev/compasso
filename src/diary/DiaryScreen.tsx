@@ -78,6 +78,7 @@ import {
 } from "../cookbooks/zest/components/ui/GlassSurface";
 import { theme as zestTheme } from "../cookbooks/zest/theme";
 import { DiaryCalendar } from "./DiaryCalendar";
+import { DiarySearch } from "./DiarySearch";
 import { quotedEntryText, threadEntryIds, type Entry } from "./entries";
 import {
   deleteEntries,
@@ -485,6 +486,7 @@ export function DiaryScreen() {
   const [saving, setSaving] = useState(false);
   const [picking, setPicking] = useState(false);
   const [calendar, setCalendar] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [arriving, setArriving] = useState<string>();
   const [newIdeas, setNewIdeas] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(88);
@@ -1293,6 +1295,18 @@ export function DiaryScreen() {
           )}
           {!selection && (
             <GlassButton
+              name="magnifyingglass"
+              label="Buscar no diário"
+              onPress={() => {
+                if (busy.current) return;
+                showAttachments(false);
+                Keyboard.dismiss();
+                setSearchOpen(true);
+              }}
+            />
+          )}
+          {!selection && (
+            <GlassButton
               name="calendar"
               label="Abrir calendário"
               onPress={openCalendar}
@@ -1682,6 +1696,9 @@ export function DiaryScreen() {
               closeCalendar();
             }}
           />
+        )}
+        {searchOpen && (
+          <DiarySearch index={index} onClose={() => setSearchOpen(false)} />
         )}
         {editing && (
           <Modal
