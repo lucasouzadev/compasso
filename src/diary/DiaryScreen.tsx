@@ -1225,9 +1225,14 @@ export function DiaryScreen() {
                     month: "short",
                   })}
             </Text>
-            {!writingToday && (
+            {(!writingToday || status === "ready") && (
               <Text style={styles.muted}>
-                {parseDay(activeDay).getFullYear()}
+                {!writingToday && parseDay(activeDay).getFullYear()}
+                {!writingToday && status === "ready" && " · "}
+                {status === "ready" &&
+                  (entries.length === 1
+                    ? "1 registro"
+                    : `${entries.length} registros`)}
               </Text>
             )}
           </View>

@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-  type ComponentType,
-  type ReactElement,
-} from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Image,
   FlatList,
@@ -14,14 +7,16 @@ import {
   StyleSheet,
   Text,
   View,
-  type ViewProps,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   FadeIn,
+  SlideInDown,
   ReduceMotion,
   useAnimatedStyle,
+  useSharedValue,
+  useReducedMotion,
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
@@ -30,21 +25,19 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { dayKey, monthCells, parseDay } from "../cookbooks/zest/data/diary";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
-import NativeMaskedView from "@react-native-masked-view/masked-view";
-import { LinearGradient } from "expo-linear-gradient";
+import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
 import { GlassSurface } from "../cookbooks/zest/components/ui/GlassSurface";
 import { theme } from "../cookbooks/zest/theme";
 import type { Entry } from "./entries";
 import { entryPhotoUri, findDayPhoto, readDay } from "./storage";
 
-const MaskedView = NativeMaskedView as unknown as ComponentType<
-  ViewProps & { maskElement: ReactElement }
->;
-
 const weekdays = ["S", "T", "Q", "Q", "S", "S", "D"];
 const fullDate = (day: string) =>
   parseDay(day).toLocaleDateString("pt-BR", { dateStyle: "full" });
 const reveal = FadeIn.duration(170).reduceMotion(ReduceMotion.System);
+const revealDetail = SlideInDown.duration(240).reduceMotion(
+  ReduceMotion.System,
+);
 
 export function DiaryCalendar({
   index,
@@ -67,7 +60,12 @@ export function DiaryCalendar({
   const { height, fontScale } = useWindowDimensions();
   const [selected, setSelected] = useState(initialDay);
   const [month, setMonth] = useState(() => parseDay(initialDay));
-  const [detail, setDetail] = useState<Entry>();
+  const [detailId, setDetailId] = useState<string>();
+  const reducedMotion = useReducedMotion();
+  const monthOffset = useSharedValue(0);
+  const monthSlide = useAnimatedStyle(() => ({
+    transform: [{ translateX: monthOffset.get() }],
+  }));
   const cells = monthCells(month.getFullYear(), month.getMonth());
   const [previews, setPreviews] = useState(new Map<string, string>());
   const monthKey = dayKey(month).slice(0, 7);
@@ -101,6 +99,9 @@ export function DiaryCalendar({
       return [];
     }
   }, [index, selected]);
+  const detail = entries.find((entry) => entry.id === detailId);
+  const closeDetail = () => setDetailId(undefined);
+  const dismiss = detail ? closeDetail : onClose;
   const canOpenDay = selected === today || index.has(selected);
   const panelHeight = Math.min(580, height - insets.top - insets.bottom - 68);
   const compact = panelHeight < 470 && fontScale <= 1.2;
@@ -137,15 +138,42 @@ export function DiaryCalendar({
     setSelected(dayKey(next));
   }
 
+  function swipeMonth(direction: number) {
+    void selectionAsync();
+    stepMonth(direction);
+  }
+
+  const scroll = Gesture.Native();
+  const monthSwipe = Gesture.Pan()
+    .simultaneousWithExternalGesture(scroll)
+    .activeOffsetX([-18, 18])
+    .failOffsetY([-12, 12])
+    .onUpdate(({ translationX }) => {
+      if (!reducedMotion) monthOffset.set(translationX * 0.4);
+    })
+    .onEnd(({ translationX, velocityX }, finished) => {
+      if (
+        finished &&
+        (Math.abs(translationX) > 60 || Math.abs(velocityX) > 500)
+      ) {
+        scheduleOnRN(swipeMonth, translationX < 0 ? 1 : -1);
+      }
+    })
+    .onFinalize(() => {
+      monthOffset.set(
+        withTiming(0, { duration: 180, reduceMotion: ReduceMotion.System }),
+      );
+    });
+
   return (
     <View
       style={StyleSheet.absoluteFill}
       accessibilityViewIsModal
-      onAccessibilityEscape={onClose}
+      onAccessibilityEscape={dismiss}
     >
       <Pressable
         accessible={false}
-        onPress={onClose}
+        onPress={dismiss}
         style={StyleSheet.absoluteFill}
       />
       <Animated.View
@@ -156,131 +184,130 @@ export function DiaryCalendar({
         ]}
       >
         <GlassSurface style={styles.panel}>
-          <GestureDetector gesture={pull}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Fechar calendário"
-              onPress={onClose}
-              style={styles.grabber}
-            >
-              <View style={styles.handle} />
-            </Pressable>
-          </GestureDetector>
-          {detail ? (
-            <Animated.View entering={reveal} style={styles.detail}>
-              <View style={styles.monthRow}>
-                <GlassButton
-                  name="chevron.left"
-                  label="Voltar ao calendário"
-                  onPress={() => setDetail(undefined)}
-                />
-                <Text accessibilityRole="header" style={styles.month}>
-                  {fullDate(selected)}
-                </Text>
-              </View>
-              <ScrollView contentContainerStyle={styles.detailContent}>
-                {renderEntry(detail)}
-              </ScrollView>
-            </Animated.View>
-          ) : (
-            <>
-              <View style={[styles.monthRow, styles.monthHeader]}>
-                <Text accessibilityRole="header" style={styles.month}>
-                  {month.toLocaleDateString("pt-BR", {
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </Text>
-                <GlassButton
-                  name="chevron.left"
-                  size={40}
-                  label="Mês anterior"
-                  onPress={() => stepMonth(-1)}
-                />
-                <GlassButton
-                  name="chevron.right"
-                  size={40}
-                  label="Próximo mês"
-                  onPress={() => stepMonth(1)}
-                />
-              </View>
-              <MaskedView
-                style={styles.grow}
-                maskElement={
-                  <LinearGradient
-                    colors={["transparent", "black", "black", "transparent"]}
-                    locations={[0, 0.025, 0.94, 1]}
-                    style={styles.grow}
-                  />
-                }
+          <View
+            style={styles.viewport}
+            pointerEvents={detail ? "none" : "auto"}
+            accessibilityElementsHidden={!!detail}
+            importantForAccessibility={detail ? "no-hide-descendants" : "auto"}
+          >
+            <GestureDetector gesture={scroll}>
+              <ScrollView
+                style={styles.unclipped}
+                alwaysBounceVertical
+                directionalLockEnabled
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.content}
               >
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.content}
-                >
-                  <View style={styles.row}>
-                    {weekdays.map((day, index) => (
-                      <Text key={index} style={styles.weekday}>
-                        {day}
-                      </Text>
-                    ))}
-                  </View>
-                  {Array.from({ length: 6 }, (_, row) => (
-                    <View key={row} style={styles.row}>
-                      {weekdays.map((_, column) => {
-                        const day = cells[row * 7 + column];
-                        const cell = [
-                          styles.cell,
-                          compact && styles.compactCell,
-                        ];
-                        if (!day) return <View key={column} style={cell} />;
-                        const count = index.get(day)?.length ?? 0;
-                        const thumbnail = previews.get(day);
-                        return (
-                          <Pressable
-                            key={day}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: day === selected }}
-                            accessibilityLabel={`${fullDate(day)}, ${count} entradas`}
-                            onPress={() => {
-                              if (day !== selected) void selectionAsync();
-                              setSelected(day);
-                            }}
-                            style={cell}
-                          >
-                            {day === selected && (
-                              <View
-                                pointerEvents="none"
-                                style={StyleSheet.absoluteFill}
+                <GestureDetector gesture={pull}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Fechar calendário"
+                    onPress={onClose}
+                    style={styles.grabber}
+                  >
+                    <View style={styles.handle} />
+                  </Pressable>
+                </GestureDetector>
+                <Animated.View style={monthSlide}>
+                  <GestureDetector gesture={monthSwipe}>
+                    <View>
+                      <View style={[styles.monthRow, styles.monthHeader]}>
+                        <Text accessibilityRole="header" style={styles.month}>
+                          {month.toLocaleDateString("pt-BR", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </Text>
+                        <Touch
+                          label="Mês anterior"
+                          onPress={() => stepMonth(-1)}
+                          style={styles.monthButton}
+                        >
+                          <Symbol
+                            name="chevron.left"
+                            size={15}
+                            color={theme.ink}
+                          />
+                        </Touch>
+                        <Touch
+                          label="Próximo mês"
+                          onPress={() => stepMonth(1)}
+                          style={styles.monthButton}
+                        >
+                          <Symbol
+                            name="chevron.right"
+                            size={15}
+                            color={theme.ink}
+                          />
+                        </Touch>
+                      </View>
+                      <View style={styles.row}>
+                        {weekdays.map((day, index) => (
+                          <Text key={index} style={styles.weekday}>
+                            {day}
+                          </Text>
+                        ))}
+                      </View>
+                      {Array.from({ length: 6 }, (_, row) => (
+                        <View key={row} style={styles.row}>
+                          {weekdays.map((_, column) => {
+                            const day = cells[row * 7 + column];
+                            const cell = [
+                              styles.cell,
+                              compact && styles.compactCell,
+                            ];
+                            if (!day) return <View key={column} style={cell} />;
+                            const count = index.get(day)?.length ?? 0;
+                            const thumbnail = previews.get(day);
+                            return (
+                              <Pressable
+                                key={day}
+                                accessibilityRole="button"
+                                accessibilityState={{
+                                  selected: day === selected,
+                                }}
+                                accessibilityLabel={`${fullDate(day)}, ${count} entradas`}
+                                onPress={() => {
+                                  if (day !== selected) void selectionAsync();
+                                  setSelected(day);
+                                }}
+                                style={cell}
                               >
-                                <GlassSurface
-                                  materialize={0}
-                                  style={styles.selected}
-                                />
-                              </View>
-                            )}
-                            {thumbnail && (
-                              <Image
-                                source={{ uri: thumbnail }}
-                                style={styles.thumbnail}
-                              />
-                            )}
-                            <Text
-                              style={[
-                                styles.day,
-                                day === today && styles.today,
-                              ]}
-                            >
-                              {parseDay(day).getDate()}
-                            </Text>
-                            {!thumbnail && count > 0 && (
-                              <View style={styles.dot} />
-                            )}
-                          </Pressable>
-                        );
-                      })}
+                                {day === selected && (
+                                  <View
+                                    pointerEvents="none"
+                                    style={StyleSheet.absoluteFill}
+                                  >
+                                    <GlassSurface
+                                      materialize={0}
+                                      style={styles.selected}
+                                    />
+                                  </View>
+                                )}
+                                {thumbnail && (
+                                  <Image
+                                    source={{ uri: thumbnail }}
+                                    style={styles.thumbnail}
+                                  />
+                                )}
+                                <Text
+                                  style={[
+                                    styles.day,
+                                    day === today && styles.today,
+                                  ]}
+                                >
+                                  {parseDay(day).getDate()}
+                                </Text>
+                                {!thumbnail && count > 0 && (
+                                  <View style={styles.dot} />
+                                )}
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ))}
                     </View>
-                  ))}
+                  </GestureDetector>
                   <Animated.View
                     key={selected}
                     entering={reveal}
@@ -302,68 +329,84 @@ export function DiaryCalendar({
                       )}
                     </View>
                     {entries.length ? (
-                      <MaskedView
-                        style={styles.carousel}
-                        maskElement={
-                          <LinearGradient
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            colors={[
-                              "transparent",
-                              "black",
-                              "black",
-                              "transparent",
-                            ]}
-                            locations={[0, 0.045, 0.955, 1]}
-                            style={styles.grow}
-                          />
-                        }
-                      >
-                        <FlatList
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={styles.previews}
-                          data={entries}
-                          keyExtractor={(entry) => entry.id}
-                          renderItem={({ item: entry }) => {
-                            const photo = entryPhotoUri(entry);
-                            return (
-                              <Pressable
-                                key={entry.id}
-                                accessibilityRole="button"
-                                accessibilityLabel={
-                                  entry.text || "Abrir foto da entrada"
-                                }
-                                onPress={() => setDetail(entry)}
-                                style={styles.preview}
-                              >
-                                {photo ? (
-                                  <Image
-                                    source={{ uri: photo }}
-                                    style={styles.previewPhoto}
-                                  />
-                                ) : (
-                                  <Text
-                                    numberOfLines={2}
-                                    style={styles.previewText}
-                                  >
-                                    {entry.text}
-                                  </Text>
-                                )}
-                              </Pressable>
-                            );
-                          }}
-                        />
-                      </MaskedView>
+                      <FlatList
+                        horizontal
+                        style={[styles.carousel, styles.unclipped]}
+                        removeClippedSubviews={false}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.previews}
+                        data={entries}
+                        keyExtractor={(entry) => entry.id}
+                        renderItem={({ item: entry }) => {
+                          const photo = entryPhotoUri(entry);
+                          return (
+                            <Pressable
+                              key={entry.id}
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                entry.text || "Abrir foto da entrada"
+                              }
+                              onPress={() => setDetailId(entry.id)}
+                              style={styles.preview}
+                            >
+                              {photo ? (
+                                <Image
+                                  source={{ uri: photo }}
+                                  style={styles.previewPhoto}
+                                />
+                              ) : (
+                                <Text
+                                  numberOfLines={2}
+                                  style={styles.previewText}
+                                >
+                                  {entry.text}
+                                </Text>
+                              )}
+                            </Pressable>
+                          );
+                        }}
+                      />
                     ) : (
                       <Text style={styles.empty}>
                         Nenhuma entrada neste dia.
                       </Text>
                     )}
                   </Animated.View>
-                </ScrollView>
-              </MaskedView>
-            </>
+                </Animated.View>
+              </ScrollView>
+            </GestureDetector>
+          </View>
+          {detail && (
+            <View style={styles.detailLayer} accessibilityViewIsModal>
+              <Pressable
+                accessible={false}
+                onPress={closeDetail}
+                style={StyleSheet.absoluteFill}
+              />
+              <Animated.View entering={revealDetail} style={styles.detailSheet}>
+                <GlassSurface style={styles.panel}>
+                  <View style={styles.viewport}>
+                    <ScrollView
+                      style={styles.unclipped}
+                      showsVerticalScrollIndicator={false}
+                      contentContainerStyle={styles.detailContent}
+                    >
+                      <View style={styles.monthRow}>
+                        <GlassButton
+                          name="chevron.left"
+                          label="Voltar ao calendário"
+                          onPress={closeDetail}
+                        />
+                        <Text accessibilityRole="header" style={styles.month}>
+                          {fullDate(selected)}
+                        </Text>
+                      </View>
+                      {renderEntry(detail)}
+                    </ScrollView>
+                  </View>
+                </GlassSurface>
+              </Animated.View>
+            </View>
           )}
         </GlassSurface>
       </Animated.View>
@@ -389,9 +432,23 @@ const styles = StyleSheet.create({
   },
   panel: { flex: 1, borderRadius: 36 },
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 38 },
-  monthHeader: { paddingHorizontal: 16, paddingVertical: 6, minHeight: 54 },
-  detail: { flex: 1, padding: 16 },
-  detailContent: { paddingBottom: 12 },
+  viewport: {
+    flex: 1,
+    borderRadius: 36,
+    borderCurve: "continuous",
+    overflow: "hidden",
+  },
+  unclipped: { overflow: "visible" },
+  monthHeader: { minHeight: 54 },
+  monthButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailLayer: { ...StyleSheet.absoluteFill, justifyContent: "flex-end" },
+  detailSheet: { height: "85%" },
+  detailContent: { padding: 16, paddingBottom: 24 },
   monthRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -421,8 +478,6 @@ const styles = StyleSheet.create({
   thumbnail: { width: 22, height: 22, borderRadius: 5 },
   dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: theme.accent },
   dayFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.line,
     marginTop: 8,
     paddingTop: 10,
   },
