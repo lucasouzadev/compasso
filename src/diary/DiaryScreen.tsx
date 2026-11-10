@@ -212,11 +212,15 @@ function EntryCard({
   const armed = useSharedValue(false);
   function openActions(position: BubbleBounds) {
     const writingActions: DiaryMenuAction[] = [
-      {
-        title: "Continuar",
-        icon: "arrowshape.turn.up.left.fill",
-        onPress: onContinue,
-      },
+      ...(allowSwipe
+        ? [
+            {
+              title: "Continuar",
+              icon: "arrowshape.turn.up.left.fill" as const,
+              onPress: onContinue,
+            },
+          ]
+        : []),
       { title: "Editar", icon: "pencil", onPress: onEdit },
       { title: "Excluir", icon: "trash", destructive: true, onPress: onDelete },
     ];
@@ -266,9 +270,9 @@ function EntryCard({
         reaction: entry.reaction,
         onReact,
         actions: [
-          writingActions[0],
+          ...writingActions.slice(0, -2),
           ...otherActions,
-          ...writingActions.slice(1),
+          ...writingActions.slice(-2),
         ],
         children: (
           <View style={[styles.entry, size]}>
@@ -294,7 +298,7 @@ function EntryCard({
         undefined,
         [
           {
-            text: "Editar ou continuar",
+            text: allowSwipe ? "Editar ou continuar" : "Editar ou excluir",
             onPress: () => showActions(writingActions),
           },
           {

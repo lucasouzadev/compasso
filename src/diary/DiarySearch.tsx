@@ -39,7 +39,7 @@ import {
   normalizeDiarySearch,
   type Entry,
 } from "./entries";
-import { DiaryTagFilter } from "./DiaryTagFilter";
+import { DiaryTagFilter, DiaryTagMenu } from "./DiaryTagFilter";
 import { entryPhotoUri, readSearchEntries } from "./storage";
 
 const appear = FadeInDown.duration(180).reduceMotion(ReduceMotion.System);
@@ -182,7 +182,17 @@ export function DiarySearch({
                       ? "Favoritos"
                       : "Buscar no diário"}
                 </Text>
-                <View style={styles.headerSpacer} />
+                {!selected && Platform.OS !== "web" ? (
+                  <DiaryTagMenu
+                    tags={tags}
+                    selected={tag}
+                    ready={ready}
+                    onSelect={setTag}
+                    iconOnly
+                  />
+                ) : (
+                  <View style={styles.headerSpacer} />
+                )}
               </View>
               <View style={styles.fill}>
                 <View
@@ -193,7 +203,10 @@ export function DiarySearch({
                     selected ? "no-hide-descendants" : "auto"
                   }
                 >
-                  <GlassSurface style={styles.tabs} materialize={0}>
+                  <View style={styles.tabs}>
+                    <View pointerEvents="none" style={styles.tabGlassBacking}>
+                      <GlassSurface style={styles.tabGlass} materialize={0} />
+                    </View>
                     <Animated.View
                       pointerEvents="none"
                       style={[styles.tabIndicator, indicator]}
@@ -206,6 +219,13 @@ export function DiarySearch({
                         onPress={() => setFavorites(value)}
                         style={styles.tab}
                       >
+                        <Symbol
+                          name={value ? "bookmark" : "magnifyingglass"}
+                          size={14}
+                          color={
+                            favorites === value ? theme.accent : theme.muted
+                          }
+                        />
                         <Text
                           style={[
                             styles.tabLabel,
@@ -221,8 +241,8 @@ export function DiarySearch({
                         </Text>
                       </Pressable>
                     ))}
-                  </GlassSurface>
-                  {tags.length > 0 && (
+                  </View>
+                  {Platform.OS === "web" && tags.length > 0 && (
                     <DiaryTagFilter
                       tags={tags}
                       selected={tag}
@@ -448,17 +468,32 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerSpacer: { width: 44 },
   title: { flex: 1, fontSize: 19, fontWeight: "600", textAlign: "center" },
-  tabs: { flexDirection: "row", borderRadius: 22 },
+  tabs: {
+    flexDirection: "row",
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 330,
+  },
+  tabGlassBacking: {
+    position: "absolute",
+    top: 5,
+    bottom: 5,
+    left: 0,
+    right: 0,
+  },
+  tabGlass: { flex: 1, borderRadius: 17 },
   tabIndicator: {
     position: "absolute",
     width: "50%",
-    top: 5,
-    bottom: 5,
+    top: 8,
+    bottom: 8,
     borderRadius: 18,
     backgroundColor: "#F2DAD3A6",
   },
   tab: {
     flex: 1,
+    flexDirection: "row",
+    gap: 6,
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
