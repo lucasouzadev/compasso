@@ -16,9 +16,15 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useReducedMotion } from "react-native-reanimated";
 import { dayKey, parseDay } from "../cookbooks/zest/data/diary";
-import { useGlassTheme } from "../cookbooks/zest/components/ui/GlassSurface";
+import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
+import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
+import {
+  GlassSurface,
+  useGlassTheme,
+} from "../cookbooks/zest/components/ui/GlassSurface";
 import { Symbol } from "../cookbooks/zest/components/ui/Touch";
 import { normalizeDiarySearch, type Entry } from "./entries";
 import { entryPhotoUri, readSearchEntries } from "./storage";
@@ -104,197 +110,200 @@ export function DiarySearch({
       onShow={() => input.current?.focus()}
       onRequestClose={goBack}
     >
-      <SafeAreaProvider style={[styles.fill, { backgroundColor: theme.paper }]}>
-        <KeyboardAvoidingView
-          automaticOffset
-          behavior="padding"
-          enabled={Platform.OS === "ios"}
-          style={styles.fill}
-          onAccessibilityEscape={goBack}
+      <GestureHandlerRootView style={styles.fill}>
+        <SafeAreaProvider
+          style={[styles.fill, { backgroundColor: theme.paper }]}
         >
-          <SafeAreaView
-            edges={{
-              top: "maximum",
-              bottom: "maximum",
-              left: "maximum",
-              right: "maximum",
-            }}
-            style={styles.sheet}
+          <KeyboardAvoidingView
+            automaticOffset
+            behavior="padding"
+            enabled={Platform.OS === "ios"}
+            style={styles.fill}
+            onAccessibilityEscape={goBack}
           >
-            <View style={styles.header}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  selected ? "Voltar aos resultados" : "Fechar busca"
-                }
-                onPress={goBack}
-                style={[styles.iconButton, { borderColor: theme.line }]}
-              >
-                <Symbol
+            <SafeAreaView
+              edges={{
+                top: "maximum",
+                bottom: "maximum",
+                left: "maximum",
+                right: "maximum",
+              }}
+              style={styles.sheet}
+            >
+              <View style={styles.header}>
+                <GlassButton
                   name={selected ? "chevron.left" : "xmark"}
-                  size={17}
-                  color={theme.ink}
+                  label={selected ? "Voltar aos resultados" : "Fechar busca"}
+                  onPress={goBack}
                 />
-              </Pressable>
-              <Text
-                accessibilityRole="header"
-                style={[styles.title, { color: theme.ink }]}
-              >
-                {selected ? "Entrada" : "Buscar no diário"}
-              </Text>
-            </View>
-            <View style={styles.fill}>
-              <View
-                style={styles.fill}
-                pointerEvents={selected ? "none" : "auto"}
-                accessibilityElementsHidden={!!selected}
-                importantForAccessibility={
-                  selected ? "no-hide-descendants" : "auto"
-                }
-              >
-                <View
-                  style={[
-                    styles.searchField,
-                    { borderColor: theme.line, backgroundColor: theme.surface },
-                  ]}
+                <Text
+                  accessibilityRole="header"
+                  style={[styles.title, { color: theme.ink }]}
                 >
-                  <Symbol
-                    name="magnifyingglass"
-                    size={17}
-                    color={theme.muted}
-                  />
-                  <TextInput
-                    ref={input}
-                    accessibilityLabel="Texto para buscar"
-                    placeholder="Busque pelo que escreveu"
-                    placeholderTextColor={theme.muted}
-                    selectionColor={theme.accent}
-                    value={query}
-                    onChangeText={setQuery}
-                    returnKeyType="search"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={[styles.input, { color: theme.ink }]}
-                  />
-                  {query.length > 0 && (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Limpar busca"
-                      onPress={() => {
-                        setQuery("");
-                        input.current?.focus();
-                      }}
-                      style={styles.clear}
-                    >
-                      <Symbol
-                        name="xmark.circle.fill"
-                        size={18}
-                        color={theme.muted}
-                      />
-                    </Pressable>
-                  )}
-                </View>
-                <SectionList
-                  sections={sections}
-                  keyExtractor={(entry) => entry.id}
-                  keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode="interactive"
-                  stickySectionHeadersEnabled={false}
-                  contentContainerStyle={styles.results}
-                  ListEmptyComponent={
-                    hasQuery && !ready ? (
-                      <ActivityIndicator
-                        accessibilityLabel="Buscando entradas"
-                        color={theme.accent}
-                      />
-                    ) : (
-                      <Text style={[styles.empty, { color: theme.muted }]}>
-                        {emptyText}
-                      </Text>
-                    )
-                  }
-                  ListFooterComponent={
-                    hasQuery && ready && !!loaded.skipped ? (
-                      <Text style={[styles.empty, { color: theme.muted }]}>
-                        Algumas entradas não puderam ser lidas.
-                      </Text>
-                    ) : undefined
-                  }
-                  renderSectionHeader={({ section }) => (
-                    <Text
-                      accessibilityRole="header"
-                      style={[styles.day, { color: theme.muted }]}
-                    >
-                      {dateLabel(section.day)}
-                    </Text>
-                  )}
-                  renderItem={({ item }) => (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        setSelected(item);
-                      }}
-                      style={({ pressed }) => [
-                        styles.result,
-                        {
-                          borderBottomColor: theme.line,
-                          opacity: pressed ? 0.65 : 1,
-                        },
-                      ]}
-                    >
-                      <View style={styles.fill}>
-                        <Text style={[styles.time, { color: theme.muted }]}>
-                          {entryTime(item)}
-                        </Text>
-                        <Text
-                          numberOfLines={3}
-                          style={[styles.excerpt, { color: theme.ink }]}
-                        >
-                          {item.text}
-                        </Text>
-                      </View>
-                      <Symbol
-                        name="chevron.right"
-                        size={13}
-                        color={theme.muted}
-                      />
-                    </Pressable>
-                  )}
-                />
+                  {selected ? "Entrada" : "Buscar no diário"}
+                </Text>
+                <View style={styles.headerSpacer} />
               </View>
-              {selected && (
-                <ScrollView
-                  style={[
-                    StyleSheet.absoluteFill,
-                    { backgroundColor: theme.paper },
-                  ]}
+              <View style={styles.fill}>
+                <View
+                  style={styles.fill}
+                  pointerEvents={selected ? "none" : "auto"}
+                  accessibilityElementsHidden={!!selected}
+                  importantForAccessibility={
+                    selected ? "no-hide-descendants" : "auto"
+                  }
                 >
-                  <Text style={[styles.day, { color: theme.muted }]}>
-                    {dateLabel(entryDay(selected))} · {entryTime(selected)}
-                  </Text>
-                  <View style={[styles.entry, { backgroundColor: "#F8DFDB" }]}>
-                    <Text
-                      selectable
-                      style={[styles.excerpt, { color: theme.ink }]}
-                    >
-                      {selected.text}
-                    </Text>
-                    {photo && (
-                      <Image
-                        source={{ uri: photo }}
-                        accessibilityLabel="Foto da entrada"
-                        resizeMode="contain"
-                        style={styles.photo}
+                  <View pointerEvents="box-none" style={styles.searchDock}>
+                    <GlassSurface materialize={0} style={styles.searchField}>
+                      <Symbol
+                        name="magnifyingglass"
+                        size={17}
+                        color={theme.muted}
                       />
-                    )}
+                      <TextInput
+                        ref={input}
+                        accessibilityLabel="Texto para buscar"
+                        placeholder="Busque pelo que escreveu"
+                        placeholderTextColor={theme.muted}
+                        selectionColor={theme.accent}
+                        value={query}
+                        onChangeText={setQuery}
+                        returnKeyType="search"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={[styles.input, { color: theme.ink }]}
+                      />
+                      {query.length > 0 && (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Limpar busca"
+                          onPress={() => {
+                            setQuery("");
+                            input.current?.focus();
+                          }}
+                          style={styles.clear}
+                        >
+                          <Symbol
+                            name="xmark.circle.fill"
+                            size={18}
+                            color={theme.muted}
+                          />
+                        </Pressable>
+                      )}
+                    </GlassSurface>
                   </View>
-                </ScrollView>
-              )}
-            </View>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
-      </SafeAreaProvider>
+                  <View style={styles.fill}>
+                    <SectionList
+                      sections={sections}
+                      keyExtractor={(entry) => entry.id}
+                      keyboardShouldPersistTaps="handled"
+                      keyboardDismissMode="interactive"
+                      stickySectionHeadersEnabled={false}
+                      contentContainerStyle={styles.results}
+                      ListEmptyComponent={
+                        hasQuery && !ready ? (
+                          <ActivityIndicator
+                            accessibilityLabel="Buscando entradas"
+                            color={theme.accent}
+                          />
+                        ) : (
+                          <Text style={[styles.empty, { color: theme.muted }]}>
+                            {emptyText}
+                          </Text>
+                        )
+                      }
+                      ListFooterComponent={
+                        hasQuery && ready && !!loaded.skipped ? (
+                          <Text style={[styles.empty, { color: theme.muted }]}>
+                            Algumas entradas não puderam ser lidas.
+                          </Text>
+                        ) : undefined
+                      }
+                      renderSectionHeader={({ section }) => (
+                        <Text
+                          accessibilityRole="header"
+                          style={[styles.day, { color: theme.muted }]}
+                        >
+                          {dateLabel(section.day)}
+                        </Text>
+                      )}
+                      renderItem={({ item }) => (
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => {
+                            Keyboard.dismiss();
+                            setSelected(item);
+                          }}
+                          style={({ pressed }) => [
+                            styles.result,
+                            {
+                              borderBottomColor: theme.line,
+                              opacity: pressed ? 0.65 : 1,
+                            },
+                          ]}
+                        >
+                          <View style={styles.fill}>
+                            <Text style={[styles.time, { color: theme.muted }]}>
+                              {entryTime(item)}
+                            </Text>
+                            <Text
+                              numberOfLines={3}
+                              style={[styles.excerpt, { color: theme.ink }]}
+                            >
+                              {item.text}
+                            </Text>
+                          </View>
+                          <Symbol
+                            name="chevron.right"
+                            size={13}
+                            color={theme.muted}
+                          />
+                        </Pressable>
+                      )}
+                    />
+                    <ProgressiveBlur
+                      singlePass
+                      edge="top"
+                      height={18}
+                      color={theme.paper}
+                    />
+                  </View>
+                </View>
+                {selected && (
+                  <ScrollView
+                    style={[
+                      StyleSheet.absoluteFill,
+                      { backgroundColor: theme.paper },
+                    ]}
+                  >
+                    <Text style={[styles.day, { color: theme.muted }]}>
+                      {dateLabel(entryDay(selected))} · {entryTime(selected)}
+                    </Text>
+                    <View
+                      style={[styles.entry, { backgroundColor: "#F8DFDB" }]}
+                    >
+                      <Text
+                        selectable
+                        style={[styles.excerpt, { color: theme.ink }]}
+                      >
+                        {selected.text}
+                      </Text>
+                      {photo && (
+                        <Image
+                          source={{ uri: photo }}
+                          accessibilityLabel="Foto da entrada"
+                          resizeMode="contain"
+                          style={styles.photo}
+                        />
+                      )}
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+            </SafeAreaView>
+          </KeyboardAvoidingView>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -303,21 +312,15 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   sheet: {
     flex: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 12,
-    gap: 16,
+    gap: 12,
   },
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: { flex: 1, fontSize: 22, fontWeight: "600", letterSpacing: -0.4 },
+  headerSpacer: { width: 44 },
+  title: { flex: 1, fontSize: 19, fontWeight: "600", textAlign: "center" },
+  searchDock: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 1 },
   searchField: {
     flexDirection: "row",
     alignItems: "center",
@@ -326,7 +329,6 @@ const styles = StyleSheet.create({
     paddingRight: 4,
     gap: 10,
     borderRadius: 24,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   input: { flex: 1, minHeight: 44, fontSize: 16 },
   clear: {
@@ -335,7 +337,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  results: { paddingTop: 14, paddingBottom: 18 },
+  results: { paddingTop: 18, paddingBottom: 60 },
   empty: {
     fontSize: 14,
     lineHeight: 20,
