@@ -149,8 +149,21 @@ export type ContextPointer = {
 const cell = 40;
 const row = 44;
 const reactionHeight = 50;
-const actionsHeight = 140;
 const gap = 8;
+
+export type DiaryMenuAction = {
+  title: string;
+  icon:
+    | "arrowshape.turn.up.left.fill"
+    | "pencil"
+    | "trash"
+    | "bookmark"
+    | "bookmark.fill"
+    | "doc.on.doc"
+    | "square.and.arrow.up";
+  destructive?: boolean;
+  onPress: () => void;
+};
 
 export function EntryActions({
   bounds,
@@ -159,9 +172,7 @@ export function EntryActions({
   children,
   reaction,
   onReact,
-  onContinue,
-  onEdit,
-  onDelete,
+  actions,
 }: {
   bounds: BubbleBounds;
   pointer: SharedValue<ContextPointer>;
@@ -169,9 +180,7 @@ export function EntryActions({
   children: ReactNode;
   reaction?: string;
   onReact: (emoji: string) => void;
-  onContinue: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  actions: DiaryMenuAction[];
 }) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -189,6 +198,8 @@ export function EntryActions({
     );
   }, [phase]);
 
+  const actionCount = actions.length;
+  const actionsHeight = actionCount * row + 8;
   const minTop = insets.top + reactionHeight + gap * 2;
   const bottom = height - insets.bottom - actionsHeight - gap * 2;
   const previewHeight = Math.min(source.height, Math.max(48, bottom - minTop));
@@ -207,7 +218,7 @@ export function EntryActions({
     railOffset.set(contentOffset.x);
   });
   const plusIndex = railEmojis.length;
-  const firstAction = (actionsHeight - 3 * row) / 2;
+  const firstAction = (actionsHeight - actionCount * row) / 2;
   const target = useDerivedValue(() => {
     const point = pointer.get();
     if (point.phase === "idle") return -1;
@@ -227,7 +238,7 @@ export function EntryActions({
     }
     const mx = point.x - menuLeft;
     const my = point.y - menuTop - firstAction;
-    if (mx >= 0 && mx < menuWidth && my >= 0 && my < 3 * row) {
+    if (mx >= 0 && mx < menuWidth && my >= 0 && my < actionCount * row) {
       return plusIndex + 1 + Math.floor(my / row);
     }
     return -1;
@@ -302,7 +313,7 @@ export function EntryActions({
     else if (index === plusIndex) {
       pointer.set({ x: 0, y: 0, phase: "idle" });
       setSheetOpen(true);
-    } else close([onContinue, onEdit, onDelete][index - plusIndex - 1]);
+    } else close(actions[index - plusIndex - 1]?.onPress);
   }
   function selectionHaptic() {
     void selectionAsync().catch(() => {});
@@ -428,6 +439,7 @@ export function EntryActions({
             actionsStyle,
             styles.actions,
             {
+              height: actionsHeight,
               top: menuTop,
               left: menuLeft,
               width: menuWidth,
@@ -452,22 +464,13 @@ export function EntryActions({
             />
             <Host colorScheme="light" style={styles.actionRows}>
               <VStack spacing={0}>
-                <MenuAction
-                  title="Continuar"
-                  icon="arrowshape.turn.up.left.fill"
-                  onPress={() => close(onContinue)}
-                />
-                <MenuAction
-                  title="Editar"
-                  icon="pencil"
-                  onPress={() => close(onEdit)}
-                />
-                <MenuAction
-                  title="Excluir"
-                  icon="trash"
-                  destructive
-                  onPress={() => close(onDelete)}
-                />
+                {actions.map((action) => (
+                  <MenuAction
+                    key={action.icon}
+                    {...action}
+                    onPress={() => close(action.onPress)}
+                  />
+                ))}
               </VStack>
             </Host>
           </Animated.View>
@@ -491,17 +494,7 @@ export function EntryActions({
   );
 }
 
-function MenuAction({
-  title,
-  icon,
-  destructive,
-  onPress,
-}: {
-  title: string;
-  icon: "arrowshape.turn.up.left.fill" | "pencil" | "trash";
-  destructive?: boolean;
-  onPress: () => void;
-}) {
+function MenuAction({ title, icon, destructive, onPress }: DiaryMenuAction) {
   return (
     <Button
       role={destructive ? "destructive" : undefined}
@@ -707,7 +700,6 @@ const styles = StyleSheet.create({
   preview: { position: "absolute" },
   actions: {
     position: "absolute",
-    height: actionsHeight,
   },
   railGlass: { flex: 1, borderRadius: 25 },
   actionRows: { flex: 1, justifyContent: "center" },

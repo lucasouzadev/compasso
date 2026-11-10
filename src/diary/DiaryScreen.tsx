@@ -17,6 +17,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   FlatList,
   StyleSheet,
   Text,
@@ -66,11 +67,13 @@ import {
   requestCameraPermissionsAsync,
 } from "expo-image-picker";
 import { selectionAsync } from "expo-haptics";
+import { setStringAsync } from "expo-clipboard";
 import { Canvas, Path, Skia } from "@shopify/react-native-skia";
 import {
   EntryActions,
   type BubbleBounds,
   type ContextPointer,
+  type DiaryMenuAction,
 } from "./EntryActions";
 import { dayKey, parseDay } from "../cookbooks/zest/data/diary";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
@@ -84,7 +87,12 @@ import {
 import { theme as zestTheme } from "../cookbooks/zest/theme";
 import { DiaryCalendar } from "./DiaryCalendar";
 import { DiarySearch } from "./DiarySearch";
-import { quotedEntryText, threadEntryIds, type Entry } from "./entries";
+import {
+  parseDiaryTags,
+  quotedEntryText,
+  threadEntryIds,
+  type Entry,
+} from "./entries";
 import {
   deleteEntries,
   setEntryReaction,
@@ -96,6 +104,7 @@ import {
   readThreadLinks,
   rememberDay,
   saveEntry,
+  toggleEntryFavorite,
 } from "./storage";
 
 const dateLabel = (day: string) =>
@@ -165,6 +174,7 @@ function EntryCard({
   selected,
   onToggle,
   onDelete,
+  onFavorite,
   onReact,
   menuActive,
   onOpenMenu,
@@ -177,6 +187,7 @@ function EntryCard({
   selected?: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onFavorite: () => void;
   onReact: (emoji: string) => void;
   menuActive: boolean;
   onOpenMenu: (
@@ -190,6 +201,51 @@ function EntryCard({
   const swipe = useSharedValue(0);
   const armed = useSharedValue(false);
   function openActions(position: BubbleBounds) {
+    const writingActions: DiaryMenuAction[] = [
+      {
+        title: "Continuar",
+        icon: "arrowshape.turn.up.left.fill",
+        onPress: onContinue,
+      },
+      { title: "Editar", icon: "pencil", onPress: onEdit },
+      { title: "Excluir", icon: "trash", destructive: true, onPress: onDelete },
+    ];
+    const otherActions: DiaryMenuAction[] = [
+      {
+        title: entry.favorite ? "Remover dos favoritos" : "Favoritar",
+        icon: entry.favorite ? "bookmark.fill" : "bookmark",
+        onPress: onFavorite,
+      },
+      ...(entry.text
+        ? [
+            {
+              title: "Copiar texto",
+              icon: "doc.on.doc" as const,
+              onPress: () => {
+                void setStringAsync(entry.text).catch(() =>
+                  Alert.alert("Não foi possível copiar o texto."),
+                );
+              },
+            },
+          ]
+        : []),
+      ...(entry.text || (Platform.OS === "ios" && photo)
+        ? [
+            {
+              title: "Compartilhar",
+              icon: "square.and.arrow.up" as const,
+              onPress: () => {
+                void Share.share({
+                  message: entry.text,
+                  ...(Platform.OS === "ios" && photo ? { url: photo } : {}),
+                }).catch(() =>
+                  Alert.alert("Não foi possível compartilhar a entrada."),
+                );
+              },
+            },
+          ]
+        : []),
+    ];
     if (Platform.OS === "ios") {
       if (position.width <= 0 || position.height <= 0) return;
       void selectionAsync().catch(() => {});
@@ -199,9 +255,11 @@ function EntryCard({
         pointer,
         reaction: entry.reaction,
         onReact,
-        onContinue,
-        onEdit,
-        onDelete,
+        actions: [
+          writingActions[0],
+          ...otherActions,
+          ...writingActions.slice(1),
+        ],
         children: (
           <View style={[styles.entry, size]}>
             <BubbleShape {...size} />
@@ -210,13 +268,29 @@ function EntryCard({
         ),
       });
     } else {
+      const showActions = (actions: DiaryMenuAction[]) =>
+        Alert.alert(
+          "Ações da entrada",
+          undefined,
+          actions.map((action) => ({
+            text: action.title,
+            style: action.destructive ? "destructive" : "default",
+            onPress: action.onPress,
+          })),
+          { cancelable: true },
+        );
       Alert.alert(
         "Ações da entrada",
         undefined,
         [
-          { text: "Continuar este pensamento", onPress: onContinue },
-          { text: "Editar", onPress: onEdit },
-          { text: "Excluir", style: "destructive", onPress: onDelete },
+          {
+            text: "Editar ou continuar",
+            onPress: () => showActions(writingActions),
+          },
+          {
+            text: "Favoritos e compartilhamento",
+            onPress: () => showActions(otherActions),
+          },
         ],
         { cancelable: true },
       );
@@ -362,6 +436,11 @@ function EntryCard({
           )}
         </Pressable>
       )}
+      {!!entry.tags?.length && (
+        <Text style={styles.entryTags}>
+          {entry.tags.map((tag) => `#${tag}`).join("  ")}
+        </Text>
+      )}
       {entry.reaction && <Text style={styles.reaction}>{entry.reaction}</Text>}
     </>
   );
@@ -412,7 +491,12 @@ function EntryCard({
     <View
       style={[styles.entryRow, selected !== undefined && styles.selectableRow]}
     >
-      <Text style={styles.entryTime}>{timeLabel(entry.createdAt)}</Text>
+      <View style={styles.entryMetadata}>
+        {entry.favorite && (
+          <Symbol name="bookmark.fill" size={12} color={interfaceRed} />
+        )}
+        <Text style={styles.entryTime}>{timeLabel(entry.createdAt)}</Text>
+      </View>
       {selected === undefined ? (
         <>
           <Animated.View
@@ -477,6 +561,7 @@ export function DiaryScreen() {
     entry: Entry;
     text: string;
     photo?: string;
+    tags: string;
   }>();
   const [original, setOriginal] = useState<Entry>();
   const originalPhoto = original && entryPhotoUri(original);
@@ -846,7 +931,12 @@ export function DiaryScreen() {
   function startEditing(entry: Entry) {
     if (busy.current || editing) return;
     Keyboard.dismiss();
-    setEditing({ entry, text: entry.text, photo: entryPhotoUri(entry) });
+    setEditing({
+      entry,
+      text: entry.text,
+      photo: entryPhotoUri(entry),
+      tags: entry.tags?.join(", ") ?? "",
+    });
   }
 
   function closeEditor() {
@@ -863,7 +953,12 @@ export function DiaryScreen() {
     busy.current = true;
     setSaving(true);
     try {
-      const updated = await editEntry(editing.entry, text, editing.photo);
+      const updated = await editEntry(
+        editing.entry,
+        text,
+        editing.photo,
+        parseDiaryTags(editing.tags),
+      );
       setJournal((current) => ({ ...current, index: new Map(current.index) }));
       setThreadLinks((links) => links && new Map(links));
       setFocusSeed((seed) => (seed?.id === updated.id ? updated : seed));
@@ -1052,6 +1147,22 @@ export function DiaryScreen() {
     }
   }
 
+  async function favorite(entry: Entry) {
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const updated = await toggleEntryFavorite(entry.id);
+      setJournal((current) => ({ ...current, index: new Map(current.index) }));
+      setThreadLinks((links) => links && new Map(links));
+      setFocusSeed((seed) => (seed?.id === updated.id ? updated : seed));
+      void selectionAsync().catch(() => {});
+    } catch {
+      Alert.alert("Não foi possível atualizar os favoritos.");
+    } finally {
+      busy.current = false;
+    }
+  }
+
   function startSelection(entry: Entry) {
     if (busy.current) return;
     if (editing) {
@@ -1147,6 +1258,7 @@ export function DiaryScreen() {
         })
       }
       onDelete={() => startSelection(entry)}
+      onFavorite={() => void favorite(entry)}
       onReact={(emoji) => react(entry, emoji)}
       onOpenOriginal={(source) => {
         void selectionAsync();
@@ -1769,6 +1881,20 @@ export function DiaryScreen() {
                               style={styles.thumbnail}
                             />
                           )}
+                          <TextInput
+                            accessibilityLabel="Tags separadas por vírgula"
+                            placeholder="Tags, separadas por vírgula"
+                            placeholderTextColor={theme.muted}
+                            value={editing.tags}
+                            onChangeText={(tags) =>
+                              setEditing(
+                                (current) => current && { ...current, tags },
+                              )
+                            }
+                            editable={!saving && !picking}
+                            autoCapitalize="none"
+                            style={styles.editorTags}
+                          />
                         </View>
                       </ScrollView>
                       <View
@@ -2020,6 +2146,12 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     paddingLeft: 24,
   },
+  entryMetadata: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: 5,
+  },
   entryTime: {
     color: theme.muted,
     fontSize: 12,
@@ -2084,6 +2216,14 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
     backgroundColor: "#FFFCF8",
   },
+  editorTags: {
+    minHeight: 44,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#D9C6BD",
+    color: theme.ink,
+    fontSize: 14,
+    paddingHorizontal: 2,
+  },
   editorInput: { height: 148, textAlignVertical: "top", padding: 2 },
   editorToolbarOverlay: {
     position: "absolute",
@@ -2136,6 +2276,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: theme.paper,
   },
+  entryTags: { color: "#79342D", fontSize: 13 },
   reaction: {
     alignSelf: "flex-end",
     backgroundColor: "#FFF5F1",

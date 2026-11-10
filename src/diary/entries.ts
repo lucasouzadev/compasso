@@ -12,6 +12,8 @@ export const entrySchema = z.object({
   quotedPhoto: photoName.nullable().optional(),
   originalText: z.string().optional(),
   reaction: z.string().optional(),
+  favorite: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 export type Entry = z.infer<typeof entrySchema>;
@@ -27,6 +29,34 @@ export function normalizeDiarySearch(text: string) {
     .toLocaleLowerCase("pt-BR")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+export function parseDiaryTags(text: string) {
+  const tags = new Map<string, string>();
+  for (const part of text.split(",")) {
+    const tag = part.trim();
+    const key = normalizeDiarySearch(tag);
+    if (key && !tags.has(key)) tags.set(key, tag);
+  }
+  return [...tags.values()];
+}
+
+export function collectDiaryTags(entries: readonly Entry[]) {
+  const tags = new Map<string, string>();
+  for (const entry of entries) {
+    for (const tag of entry.tags ?? []) {
+      const key = normalizeDiarySearch(tag);
+      if (!tags.has(key)) tags.set(key, tag);
+    }
+  }
+  return [...tags.values()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+export function matchesDiaryTag(entry: Entry, tag: string) {
+  const key = normalizeDiarySearch(tag);
+  return (
+    entry.tags?.some((value) => normalizeDiarySearch(value) === key) ?? false
+  );
 }
 
 export function entryDayFromId(id: string) {

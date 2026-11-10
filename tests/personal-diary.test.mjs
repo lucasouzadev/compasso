@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  collectDiaryTags,
+  matchesDiaryTag,
+  parseDiaryTags,
   entryDayFromId,
   entrySchema,
   normalizeDiarySearch,
@@ -85,4 +88,24 @@ test("diary search folds case, accents and whitespace for Portuguese text", () =
   assert.equal(normalizeDiarySearch("  MANHÃ\n  de AÇÃO  "), "manha de acao");
   assert.equal(normalizeDiarySearch("café".normalize("NFD")), "cafe");
   assert.equal(normalizeDiarySearch(" \n "), "");
+});
+
+test("diary tags preserve the first spelling and filter across accents and case", () => {
+  const tags = parseDiaryTags(" Viagem, Café, viagem, cafe, , Planos ");
+  assert.deepEqual(tags, ["Viagem", "Café", "Planos"]);
+  const entry = entrySchema.parse({
+    id: "1-a",
+    createdAt: "2026-11-10T12:00:00.000Z",
+    text: "Registro",
+    favorite: true,
+    tags,
+  });
+  assert.equal(entry.favorite, true);
+  assert.equal(matchesDiaryTag(entry, "CAFE"), true);
+  assert.equal(matchesDiaryTag(entry, "caf"), false);
+  assert.deepEqual(collectDiaryTags([entry, { ...entry, tags: ["cafe"] }]), [
+    "Café",
+    "Planos",
+    "Viagem",
+  ]);
 });

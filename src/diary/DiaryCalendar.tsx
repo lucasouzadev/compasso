@@ -28,8 +28,14 @@ import { dayKey, monthCells, parseDay } from "../cookbooks/zest/data/diary";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
 import { GlassSurface } from "../cookbooks/zest/components/ui/GlassSurface";
 import { theme } from "../cookbooks/zest/theme";
-import type { Entry } from "./entries";
-import { entryPhotoUri, findDayPhoto, readDay } from "./storage";
+import { collectDiaryTags, matchesDiaryTag, type Entry } from "./entries";
+import { DiaryTagFilter } from "./DiaryTagFilter";
+import {
+  entryPhotoUri,
+  findDayPhoto,
+  readDay,
+  readSearchEntries,
+} from "./storage";
 
 const weekdays = ["S", "T", "Q", "Q", "S", "S", "D"];
 const fullDate = (day: string) =>
@@ -58,6 +64,38 @@ export function DiaryCalendar({
 }) {
   const insets = useSafeAreaInsets();
   const { height, fontScale } = useWindowDimensions();
+  const [showTags, setShowTags] = useState(false);
+  const [tag, setTag] = useState<string>();
+  const [loadedTags, setLoadedTags] = useState<{
+    source: typeof index;
+    entries: Entry[];
+  }>();
+  const tagEntries =
+    loadedTags?.source === index ? loadedTags.entries : undefined;
+  useEffect(() => {
+    if ((!showTags && !tag) || tagEntries) return;
+    const abort = new AbortController();
+    void readSearchEntries(index, abort.signal).then(({ entries }) => {
+      if (!abort.signal.aborted) setLoadedTags({ source: index, entries });
+    });
+    return () => abort.abort();
+  }, [index, showTags, tag, tagEntries]);
+
+  const tags = useMemo(() => collectDiaryTags(tagEntries ?? []), [tagEntries]);
+  const visibleIndex = useMemo(() => {
+    if (!tag || !tagEntries) return index;
+    const ids = new Set(
+      tagEntries
+        .filter((entry) => matchesDiaryTag(entry, tag))
+        .map((entry) => entry.id),
+    );
+    return new Map(
+      [...index].map(([day, entries]) => [
+        day,
+        entries.filter((id) => ids.has(id)),
+      ]),
+    );
+  }, [index, tag, tagEntries]);
   const [selected, setSelected] = useState(initialDay);
   const [month, setMonth] = useState(() => parseDay(initialDay));
   const [detailId, setDetailId] = useState<string>();
@@ -71,7 +109,7 @@ export function DiaryCalendar({
   const monthKey = dayKey(month).slice(0, 7);
   useEffect(() => {
     const abort = new AbortController();
-    const days = [...index].filter(
+    const days = [...visibleIndex].filter(
       ([day, ids]) => day.startsWith(monthKey) && ids.length > 0,
     );
     void Promise.all(
@@ -91,14 +129,14 @@ export function DiaryCalendar({
       }
     });
     return () => abort.abort();
-  }, [index, monthKey]);
+  }, [visibleIndex, monthKey]);
   const entries = useMemo(() => {
     try {
-      return readDay(index.get(selected) ?? []);
+      return readDay(visibleIndex.get(selected) ?? []);
     } catch {
       return [];
     }
-  }, [index, selected]);
+  }, [visibleIndex, selected]);
   const detail = entries.find((entry) => entry.id === detailId);
   const closeDetail = () => setDetailId(undefined);
   const dismiss = detail ? closeDetail : onClose;
@@ -260,6 +298,38 @@ export function DiaryCalendar({
                           />
                         </Touch>
                       </View>
+                      <Touch
+                        label={
+                          showTags
+                            ? "Recolher filtros de tags"
+                            : "Filtrar por tag"
+                        }
+                        onPress={() => setShowTags((visible) => !visible)}
+                        style={styles.tagToggle}
+                      >
+                        <Symbol
+                          name="line.3.horizontal.decrease"
+                          size={16}
+                          color={theme.ink}
+                        />
+                        <Text style={styles.tagText}>
+                          {tag ? `#${tag}` : "Filtrar por tag"}
+                        </Text>
+                      </Touch>
+                      {showTags &&
+                        (tags.length > 0 ? (
+                          <DiaryTagFilter
+                            tags={tags}
+                            selected={tag}
+                            onSelect={setTag}
+                          />
+                        ) : (
+                          <Text style={styles.tagText}>
+                            {tagEntries
+                              ? "Nenhuma tag no diário."
+                              : "Carregando tags…"}
+                          </Text>
+                        ))}
                       <View style={styles.row}>
                         {weekdays.map((day, index) => (
                           <Text key={index} style={styles.weekday}>
@@ -276,7 +346,7 @@ export function DiaryCalendar({
                               compact && styles.compactCell,
                             ];
                             if (!day) return <View key={column} style={cell} />;
-                            const count = index.get(day)?.length ?? 0;
+                            const count = visibleIndex.get(day)?.length ?? 0;
                             const thumbnail = previews.get(day);
                             return (
                               <Pressable
@@ -474,6 +544,13 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   unclipped: { overflow: "visible" },
+  tagToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+  },
+  tagText: { color: theme.muted, fontSize: 13 },
   monthHeader: { minHeight: 54 },
   monthButton: {
     width: 44,

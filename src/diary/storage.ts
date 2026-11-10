@@ -141,15 +141,26 @@ export function entryPhotoUri(entry: Pick<Entry, "id" | "photo">) {
 export async function setEntryReaction(id: string, emoji: string) {
   const entry = readEntry(id);
   if (!entry) throw new Error("Entry unavailable");
-  const directory = new Directory(root(), id);
-  const next = latestRevision(directory) + 1;
-  const pending = new File(directory, ".reaction-pending.json").uri;
-  const updated = {
+  await saveEntryMetadata({
     ...entry,
     reaction: entry.reaction === emoji ? undefined : emoji,
-  };
+  });
+}
+
+export async function toggleEntryFavorite(id: string) {
+  const entry = readEntry(id);
+  if (!entry) throw new Error("Entry unavailable");
+  const updated = { ...entry, favorite: entry.favorite ? undefined : true };
+  await saveEntryMetadata(updated);
+  return updated;
+}
+
+async function saveEntryMetadata(entry: Entry) {
+  const directory = new Directory(root(), entry.id);
+  const next = latestRevision(directory) + 1;
+  const pending = new File(directory, ".metadata-pending.json").uri;
   try {
-    await writeAsStringAsync(pending, JSON.stringify(updated));
+    await writeAsStringAsync(pending, JSON.stringify(entry));
     await moveAsync({
       from: pending,
       to: new File(directory, `revision-${next}.json`).uri,
@@ -217,7 +228,14 @@ export async function saveEntry(
   }
 }
 
-export async function editEntry(entry: Entry, text: string, photoUri?: string) {
+export async function editEntry(
+  entry: Entry,
+  text: string,
+  photoUri: string | undefined,
+  tags: string[],
+) {
+  const current = readEntry(entry.id);
+  if (!current) throw new Error("Entry unavailable");
   const directory = new Directory(root(), entry.id);
   const revision = latestRevision(directory) + 1;
   const replacement =
@@ -231,8 +249,8 @@ export async function editEntry(entry: Entry, text: string, photoUri?: string) {
       ? entry.photo
       : undefined;
   const updated = {
-    ...entry,
-    reaction: readEntry(entry.id)?.reaction,
+    ...current,
+    tags: tags.length ? tags : undefined,
     text,
     photo,
     originalText: entry.originalText ?? entry.text,

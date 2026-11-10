@@ -26,7 +26,13 @@ import {
   useGlassTheme,
 } from "../cookbooks/zest/components/ui/GlassSurface";
 import { Symbol } from "../cookbooks/zest/components/ui/Touch";
-import { normalizeDiarySearch, type Entry } from "./entries";
+import {
+  collectDiaryTags,
+  matchesDiaryTag,
+  normalizeDiarySearch,
+  type Entry,
+} from "./entries";
+import { DiaryTagFilter } from "./DiaryTagFilter";
 import { entryPhotoUri, readSearchEntries } from "./storage";
 
 const dateLabel = (day: string) =>
@@ -46,6 +52,8 @@ export function DiarySearch({
   const reducedMotion = useReducedMotion();
   const input = useRef<TextInputInstance>(null);
   const [query, setQuery] = useState("");
+  const [favorites, setFavorites] = useState(false);
+  const [tag, setTag] = useState<string>();
   const [selected, setSelected] = useState<Entry>();
   const [loaded, setLoaded] = useState<{
     source: typeof index;
@@ -56,39 +64,48 @@ export function DiarySearch({
   const hasQuery = normalized.length > 0;
   const deferredQuery = useDeferredValue(normalized);
   const ready = loaded?.source === index;
+  const tags = useMemo(
+    () =>
+      loaded ? collectDiaryTags(loaded.rows.map(({ entry }) => entry)) : [],
+    [loaded],
+  );
 
   useEffect(() => {
-    if (!hasQuery || ready) return;
+    if (ready) return;
     const abort = new AbortController();
     void readSearchEntries(index, abort.signal).then(({ entries, skipped }) => {
       if (abort.signal.aborted) return;
       setLoaded({
         source: index,
-        rows: entries
-          .filter((entry) => entry.text.trim())
-          .map((entry) => ({
-            entry,
-            searchable: normalizeDiarySearch(entry.text),
-          })),
+        rows: entries.map((entry) => ({
+          entry,
+          searchable: normalizeDiarySearch(entry.text),
+        })),
         skipped,
       });
     });
     return () => abort.abort();
-  }, [hasQuery, index, ready]);
+  }, [index, ready]);
 
   const sections = useMemo(() => {
-    if (!hasQuery || !deferredQuery || loaded?.source !== index) return [];
-    const terms = deferredQuery.split(" ");
+    if ((!hasQuery && !favorites && !tag) || loaded?.source !== index)
+      return [];
+    const terms = hasQuery && deferredQuery ? deferredQuery.split(" ") : [];
     const byDay = new Map<string, Entry[]>();
     for (const { entry, searchable } of loaded.rows) {
-      if (!terms.every((term) => searchable.includes(term))) continue;
+      if (
+        (favorites && !entry.favorite) ||
+        (tag && !matchesDiaryTag(entry, tag)) ||
+        !terms.every((term) => searchable.includes(term))
+      )
+        continue;
       const day = entryDay(entry);
       const entries = byDay.get(day);
       if (entries) entries.push(entry);
       else byDay.set(day, [entry]);
     }
     return Array.from(byDay, ([day, data]) => ({ day, data }));
-  }, [deferredQuery, hasQuery, index, loaded]);
+  }, [deferredQuery, favorites, hasQuery, index, loaded, tag]);
 
   function goBack() {
     if (selected) setSelected(undefined);
@@ -99,9 +116,12 @@ export function DiarySearch({
   }
 
   const photo = selected && entryPhotoUri(selected);
-  const emptyText = !hasQuery
-    ? "Digite uma palavra ou trecho para encontrar o que escreveu."
-    : "Nenhuma entrada com esse texto.";
+  const emptyText =
+    favorites && !hasQuery && !tag
+      ? "Favorite entradas pelo menu para encontrá-las aqui."
+      : hasQuery || tag
+        ? "Nenhuma entrada corresponde à busca."
+        : "Digite uma palavra ou trecho para encontrar o que escreveu.";
 
   return (
     <Modal
@@ -140,7 +160,11 @@ export function DiarySearch({
                   accessibilityRole="header"
                   style={[styles.title, { color: theme.ink }]}
                 >
-                  {selected ? "Entrada" : "Buscar no diário"}
+                  {selected
+                    ? "Entrada"
+                    : favorites
+                      ? "Favoritos"
+                      : "Buscar no diário"}
                 </Text>
                 <View style={styles.headerSpacer} />
               </View>
@@ -153,6 +177,33 @@ export function DiarySearch({
                     selected ? "no-hide-descendants" : "auto"
                   }
                 >
+                  <View style={styles.tabs}>
+                    {[false, true].map((value) => (
+                      <Pressable
+                        key={String(value)}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: favorites === value }}
+                        onPress={() => setFavorites(value)}
+                        style={[
+                          styles.tab,
+                          favorites === value && {
+                            backgroundColor: theme.line,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: theme.ink }}>
+                          {value ? "Favoritos" : "Buscar"}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {tags.length > 0 && (
+                    <DiaryTagFilter
+                      tags={tags}
+                      selected={tag}
+                      onSelect={setTag}
+                    />
+                  )}
                   <View pointerEvents="box-none" style={styles.searchDock}>
                     <GlassSurface materialize={0} style={styles.searchField}>
                       <Symbol
@@ -201,7 +252,7 @@ export function DiarySearch({
                       stickySectionHeadersEnabled={false}
                       contentContainerStyle={styles.results}
                       ListEmptyComponent={
-                        hasQuery && !ready ? (
+                        (hasQuery || favorites || !!tag) && !ready ? (
                           <ActivityIndicator
                             accessibilityLabel="Buscando entradas"
                             color={theme.accent}
@@ -213,7 +264,9 @@ export function DiarySearch({
                         )
                       }
                       ListFooterComponent={
-                        hasQuery && ready && !!loaded.skipped ? (
+                        (hasQuery || favorites || !!tag) &&
+                        ready &&
+                        !!loaded.skipped ? (
                           <Text style={[styles.empty, { color: theme.muted }]}>
                             Algumas entradas não puderam ser lidas.
                           </Text>
@@ -250,7 +303,7 @@ export function DiarySearch({
                               numberOfLines={3}
                               style={[styles.excerpt, { color: theme.ink }]}
                             >
-                              {item.text}
+                              {item.text || "Foto"}
                             </Text>
                           </View>
                           <Symbol
@@ -320,6 +373,14 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerSpacer: { width: 44 },
   title: { flex: 1, fontSize: 19, fontWeight: "600", textAlign: "center" },
+  tabs: { flexDirection: "row", gap: 8, marginBottom: 4 },
+  tab: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 22,
+  },
   searchDock: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 1 },
   searchField: {
     flexDirection: "row",
