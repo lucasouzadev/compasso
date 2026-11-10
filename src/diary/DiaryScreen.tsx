@@ -1766,8 +1766,7 @@ export function DiaryScreen() {
                             <Image
                               accessibilityLabel="Foto da entrada"
                               source={{ uri: editing.photo }}
-                              resizeMode="contain"
-                              style={styles.photo}
+                              style={styles.thumbnail}
                             />
                           )}
                         </View>
@@ -1821,62 +1820,71 @@ export function DiaryScreen() {
                           prominent
                         />
                       </View>
-                    </View>
-                    <Animated.View
-                      layout={editorToolbarTransition}
-                      style={styles.editorToolbar}
-                    >
-                      <GlassSurface
-                        interactive
-                        materialize={0}
-                        style={styles.editorToolbarGlass}
+                      <View
+                        pointerEvents="box-none"
+                        style={styles.editorToolbarOverlay}
                       >
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            editing.photo ? "Trocar foto" : "Escolher foto"
-                          }
-                          disabled={saving || picking}
-                          onPress={() => void attachPhoto(false, "editor")}
-                          style={styles.editorButton}
-                        >
-                          <Symbol
-                            name="photo.on.rectangle"
-                            size={20}
-                            color={theme.ink}
-                          />
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Tirar foto"
-                          disabled={saving || picking}
-                          onPress={() => void attachPhoto(true, "editor")}
-                          style={styles.editorButton}
-                        >
-                          <Symbol name="camera" size={20} color={theme.ink} />
-                        </Pressable>
-                        {editing.photo && (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Remover foto"
-                            disabled={saving || picking}
-                            onPress={() =>
-                              setEditing(
-                                (current) =>
-                                  current && { ...current, photo: undefined },
-                              )
-                            }
-                            style={styles.editorButton}
+                        <Animated.View layout={editorToolbarTransition}>
+                          <GlassSurface
+                            interactive
+                            materialize={0}
+                            style={styles.editorToolbarGlass}
                           >
-                            <Symbol
-                              name="trash"
-                              size={18}
-                              color={interfaceRed}
-                            />
-                          </Pressable>
-                        )}
-                      </GlassSurface>
-                    </Animated.View>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={
+                                editing.photo ? "Trocar foto" : "Escolher foto"
+                              }
+                              disabled={saving || picking}
+                              onPress={() => void attachPhoto(false, "editor")}
+                              style={styles.editorButton}
+                            >
+                              <Symbol
+                                name="photo.on.rectangle"
+                                size={20}
+                                color={theme.ink}
+                              />
+                            </Pressable>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Tirar foto"
+                              disabled={saving || picking}
+                              onPress={() => void attachPhoto(true, "editor")}
+                              style={styles.editorButton}
+                            >
+                              <Symbol
+                                name="camera"
+                                size={20}
+                                color={theme.ink}
+                              />
+                            </Pressable>
+                            {editing.photo && (
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Remover foto"
+                                disabled={saving || picking}
+                                onPress={() =>
+                                  setEditing(
+                                    (current) =>
+                                      current && {
+                                        ...current,
+                                        photo: undefined,
+                                      },
+                                  )
+                                }
+                                style={styles.editorButton}
+                              >
+                                <Symbol
+                                  name="trash"
+                                  size={18}
+                                  color={interfaceRed}
+                                />
+                              </Pressable>
+                            )}
+                          </GlassSurface>
+                        </Animated.View>
+                      </View>
+                    </View>
                   </SafeAreaView>
                 </KeyboardAvoidingView>
               </SafeAreaProvider>
@@ -2066,7 +2074,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 22,
   },
-  editorContent: { paddingBottom: 12 },
+  editorContent: { paddingBottom: 60 },
   editorCard: {
     gap: 10,
     padding: 12,
@@ -2077,7 +2085,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFCF8",
   },
   editorInput: { height: 148, textAlignVertical: "top", padding: 2 },
-  editorToolbar: { alignSelf: "center" },
+  editorToolbarOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
   editorToolbarGlass: {
     flexDirection: "row",
     gap: 4,
