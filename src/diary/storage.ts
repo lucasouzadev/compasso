@@ -25,7 +25,8 @@ const journal = createDraftJournal({
   read: (key) => new File(draftRoot(), key).textSync(),
   write: (key, value) => {
     draftRoot().create({ idempotent: true });
-    new File(draftRoot(), key).write(value);
+    // The journal renames this file immediately after write returns.
+    new File(draftRoot(), key).writeSync(value);
   },
   publish: (from, to) => new File(draftRoot(), from).rename(to),
   remove: (key) => new File(draftRoot(), key).delete(),
@@ -75,7 +76,7 @@ export function keepDraftPhoto(uri: string) {
     draftRoot(),
     `image-${Date.now()}-${Math.random().toString(36).slice(2)}${extension}`,
   );
-  source.copy(copy);
+  source.copySync(copy);
   return copy.uri;
 }
 
@@ -282,13 +283,13 @@ export function deleteEntries(ids: Iterable<string>) {
           copy: (parent, photo, child, name) => {
             const target = new File(root(), child.id, name);
             if (target.exists) target.delete();
-            new File(root(), parent.id, photo).copy(target);
+            new File(root(), parent.id, photo).copySync(target);
           },
           commit: (child) => {
             const folder = new Directory(root(), child.id);
             const next = latestRevision(folder) + 1;
             const pending = new File(folder, ".quote-pending.json");
-            pending.write(JSON.stringify(child));
+            pending.writeSync(JSON.stringify(child));
             pending.rename(`revision-${next}.json`);
           },
         });
@@ -339,11 +340,11 @@ export async function saveEntry(
     pending.create();
     if (source && photo) await source.copy(new File(pending, photo));
     if (previous?.photo && entry.quotedPhotoCopy) {
-      new File(root(), previous.id, previous.photo).copy(
+      await new File(root(), previous.id, previous.photo).copy(
         new File(pending, entry.quotedPhotoCopy),
       );
     }
-    new File(pending, "entry.json").write(JSON.stringify(entry));
+    await new File(pending, "entry.json").write(JSON.stringify(entry));
     // Only publish the directory after both the entry and attachment are ready.
     pending.rename(id);
     return entry;
@@ -393,7 +394,7 @@ export async function editEntry(
       if (attachment.exists) attachment.delete();
       await replacement.copy(attachment);
     }
-    pending.write(JSON.stringify(updated));
+    await pending.write(JSON.stringify(updated));
     // Publish the metadata last so interrupted edits leave the prior revision readable.
     pending.rename(`revision-${revision}.json`);
     return updated;
