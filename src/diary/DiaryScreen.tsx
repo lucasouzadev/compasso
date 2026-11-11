@@ -34,7 +34,8 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import {
-  KeyboardAvoidingView,
+  KeyboardAwareScrollView,
+  type KeyboardAwareScrollViewRef,
   KeyboardController,
   KeyboardEvents,
   KeyboardStickyView,
@@ -573,6 +574,8 @@ export function DiaryScreen() {
   const [newIdeas, setNewIdeas] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(88);
   const [focusHeaderHeight, setFocusHeaderHeight] = useState(72);
+  const [editorTextHeight, setEditorTextHeight] = useState(148);
+  const [editorToolbarHeight, setEditorToolbarHeight] = useState(48);
   const [editorHeaderHeight, setEditorHeaderHeight] = useState(62);
   const [inputHeight, setInputHeight] = useState(inputMinimum);
   const [composerHeight, setComposerHeight] = useState(composerMinimum);
@@ -638,6 +641,7 @@ export function DiaryScreen() {
   const closingCalendar = useRef(false);
   const focusAfterCalendar = useRef(false);
   const input = useRef<TextInputInstance>(null);
+  const editorScroll = useRef<KeyboardAwareScrollViewRef>(null);
   const editorInput = useRef<TextInputInstance>(null);
   const timeline = useRef<FlatListInstance>(null);
   const threadList = useRef<FlatListInstance>(null);
@@ -960,6 +964,7 @@ export function DiaryScreen() {
   function startEditing(entry: Entry) {
     if (busy.current || editing) return;
     Keyboard.dismiss();
+    setEditorTextHeight(148);
     setEditing({
       entry,
       text: entry.text,
@@ -1905,13 +1910,7 @@ export function DiaryScreen() {
           >
             <GestureHandlerRootView style={styles.fill}>
               <SafeAreaProvider style={styles.editorSurface}>
-                <KeyboardAvoidingView
-                  automaticOffset
-                  behavior="padding"
-                  enabled={Platform.OS === "ios"}
-                  onAccessibilityEscape={closeEditor}
-                  style={styles.fill}
-                >
+                <View onAccessibilityEscape={closeEditor} style={styles.fill}>
                   <SafeAreaView
                     edges={{
                       top: "maximum",
@@ -1922,15 +1921,19 @@ export function DiaryScreen() {
                     style={styles.editor}
                   >
                     <View style={styles.editorReadingArea}>
-                      <ScrollView
+                      <KeyboardAwareScrollView
+                        ref={editorScroll}
+                        style={{ marginTop: editorHeaderHeight, flex: 1 }}
+                        bottomOffset={editorToolbarHeight + 16}
+                        disableScrollOnKeyboardHide
                         alwaysBounceVertical={false}
                         keyboardShouldPersistTaps="handled"
                         keyboardDismissMode="interactive"
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={[
-                          styles.editorContent,
-                          { paddingTop: editorHeaderHeight + 8 },
-                        ]}
+                        contentContainerStyle={{
+                          paddingTop: 8,
+                          paddingBottom: editorToolbarHeight + 16,
+                        }}
                       >
                         <View style={styles.editorCard}>
                           <TextInput
@@ -1940,6 +1943,18 @@ export function DiaryScreen() {
                             placeholderTextColor={theme.muted}
                             selectionColor={interfaceRed}
                             multiline
+                            scrollEnabled={false}
+                            onContentSizeChange={({ nativeEvent }) =>
+                              setEditorTextHeight(
+                                Math.max(
+                                  148,
+                                  Math.ceil(nativeEvent.contentSize.height),
+                                ),
+                              )
+                            }
+                            onLayout={() =>
+                              editorScroll.current?.assureFocusedInputVisible()
+                            }
                             editable={!saving && !picking}
                             value={editing.text}
                             onChangeText={(text) =>
@@ -1947,7 +1962,11 @@ export function DiaryScreen() {
                                 (current) => current && { ...current, text },
                               )
                             }
-                            style={[styles.body, styles.editorInput]}
+                            style={[
+                              styles.body,
+                              styles.editorInput,
+                              { height: editorTextHeight },
+                            ]}
                           />
                           {editing.photo && (
                             <Image
@@ -1971,7 +1990,7 @@ export function DiaryScreen() {
                             style={styles.editorTags}
                           />
                         </View>
-                      </ScrollView>
+                      </KeyboardAwareScrollView>
                       <View
                         pointerEvents="box-none"
                         onLayout={({ nativeEvent }) =>
@@ -2021,7 +2040,13 @@ export function DiaryScreen() {
                           prominent
                         />
                       </View>
-                      <View
+                      <KeyboardStickyView
+                        offset={{ opened: Math.max(insets.bottom, 12) - 12 }}
+                        onLayout={({ nativeEvent }) =>
+                          setEditorToolbarHeight(
+                            Math.ceil(nativeEvent.layout.height),
+                          )
+                        }
                         pointerEvents="box-none"
                         style={styles.editorToolbarOverlay}
                       >
@@ -2081,10 +2106,10 @@ export function DiaryScreen() {
                             )}
                           </GlassSurface>
                         </Animated.View>
-                      </View>
+                      </KeyboardStickyView>
                     </View>
                   </SafeAreaView>
-                </KeyboardAvoidingView>
+                </View>
               </SafeAreaProvider>
             </GestureHandlerRootView>
           </Modal>
@@ -2279,7 +2304,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 22,
   },
-  editorContent: { paddingBottom: 60 },
   editorCard: {
     gap: 10,
     padding: 12,
@@ -2297,7 +2321,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingHorizontal: 2,
   },
-  editorInput: { height: 148, textAlignVertical: "top", padding: 2 },
+  editorInput: { minHeight: 148, textAlignVertical: "top", padding: 2 },
   editorToolbarOverlay: {
     position: "absolute",
     bottom: 0,

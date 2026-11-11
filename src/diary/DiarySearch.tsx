@@ -31,17 +31,17 @@ import {
   GlassSurface,
   useGlassTheme,
 } from "../cookbooks/zest/components/ui/GlassSurface";
-import { Symbol } from "../cookbooks/zest/components/ui/Touch";
+import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
 import {
   collectDiaryTags,
   diarySearchExcerpt,
-  matchesDiaryTag,
   normalizeDiarySearch,
   type Entry,
 } from "./entries";
 import { DiaryTagFilter, DiaryTagMenu } from "./DiaryTagFilter";
 import { DiaryEntryBody } from "./DiaryEntryBody";
 import { readEntry, readSearchEntries } from "./storage";
+import { diarySearchSections } from "./search";
 
 const appear = FadeInDown.duration(180).reduceMotion(ReduceMotion.System);
 const fade = FadeIn.duration(160).reduceMotion(ReduceMotion.System);
@@ -75,57 +75,66 @@ export function DiarySearch({
   const [history, setHistory] = useState<Entry[]>([]);
   const [readingOffset, setReadingOffset] = useState(0);
   const readingOffsets = useRef(new Map<string, number>());
+  const [attempt, setAttempt] = useState(0);
+  const [failure, setFailure] = useState<{
+    source: typeof index;
+    attempt: number;
+  }>();
   const [loaded, setLoaded] = useState<{
     source: typeof index;
+    attempt: number;
     rows: { entry: Entry; searchable: string }[];
     skipped: number;
   }>();
   const normalized = normalizeDiarySearch(query);
   const hasQuery = normalized.length > 0;
   const deferredQuery = useDeferredValue(normalized);
-  const ready = loaded?.source === index;
+  const ready = loaded?.source === index && loaded.attempt === attempt;
+  const failed = failure?.source === index && failure.attempt === attempt;
+  const queryPending = normalized !== deferredQuery;
+  const incomplete = ready && loaded.skipped > 0;
+  const retry = () => setAttempt((current) => current + 1);
+  const clearFilters = () => {
+    setTag(undefined);
+    setFavorites(false);
+  };
   const tags = useMemo(
     () =>
-      loaded ? collectDiaryTags(loaded.rows.map(({ entry }) => entry)) : [],
-    [loaded],
+      loaded?.source === index
+        ? collectDiaryTags(loaded.rows.map(({ entry }) => entry))
+        : [],
+    [loaded, index],
   );
 
   useEffect(() => {
     if (ready) return;
     const abort = new AbortController();
-    void readSearchEntries(index, abort.signal).then(({ entries, skipped }) => {
-      if (abort.signal.aborted) return;
-      setLoaded({
-        source: index,
-        rows: entries.map((entry) => ({
-          entry,
-          searchable: normalizeDiarySearch(entry.text),
-        })),
-        skipped,
+    void readSearchEntries(index, abort.signal)
+      .then(({ entries, skipped }) => {
+        if (abort.signal.aborted) return;
+        setLoaded({
+          source: index,
+          attempt,
+          rows: entries.map((entry) => ({
+            entry,
+            searchable: normalizeDiarySearch(entry.text),
+          })),
+          skipped,
+        });
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setFailure({ source: index, attempt });
       });
-    });
     return () => abort.abort();
-  }, [index, ready]);
+  }, [index, ready, attempt]);
 
-  const sections = useMemo(() => {
-    if ((!hasQuery && !favorites && !tag) || loaded?.source !== index)
-      return [];
-    const terms = hasQuery && deferredQuery ? deferredQuery.split(" ") : [];
-    const byDay = new Map<string, Entry[]>();
-    for (const { entry, searchable } of loaded.rows) {
-      if (
-        (favorites && !entry.favorite) ||
-        (tag && !matchesDiaryTag(entry, tag)) ||
-        !terms.every((term) => searchable.includes(term))
-      )
-        continue;
-      const day = entryDay(entry);
-      const entries = byDay.get(day);
-      if (entries) entries.push(entry);
-      else byDay.set(day, [entry]);
-    }
-    return Array.from(byDay, ([day, data]) => ({ day, data }));
-  }, [deferredQuery, favorites, hasQuery, index, loaded, tag]);
+  const sections = useMemo(
+    () =>
+      ready
+        ? diarySearchSections(loaded.rows, deferredQuery, favorites, tag)
+        : [],
+    [deferredQuery, favorites, loaded, ready, tag],
+  );
 
   function goBack() {
     if (history.length) {
@@ -148,12 +157,17 @@ export function DiarySearch({
       // The citation snapshot remains readable when the source is unavailable.
     }
   }
-  const emptyText =
-    favorites && !hasQuery && !tag
-      ? "Favorite entradas pelo menu para encontrá-las aqui."
-      : hasQuery || tag
-        ? "Nenhuma entrada corresponde à busca."
-        : "Digite uma palavra ou trecho para encontrar o que escreveu.";
+  const emptyText = failed
+    ? "Não foi possível abrir o diário para buscar. Tente novamente."
+    : incomplete
+      ? "Algumas entradas não puderam ser lidas. Tente novamente para concluir a busca."
+      : favorites && !hasQuery && !tag
+        ? "Favorite entradas pelo menu para encontrá-las aqui."
+        : tag
+          ? `Nenhuma entrada corresponde aos filtros em #${tag}.`
+          : hasQuery
+            ? "Nenhuma entrada corresponde à busca."
+            : "Digite uma palavra ou trecho para encontrar o que escreveu.";
 
   return (
     <Modal
@@ -209,6 +223,8 @@ export function DiarySearch({
                     tags={tags}
                     selected={tag}
                     ready={ready}
+                    error={failed || incomplete}
+                    onRetry={retry}
                     onSelect={setTag}
                     iconOnly
                   />
@@ -317,12 +333,21 @@ export function DiarySearch({
                       keyboardShouldPersistTaps="handled"
                       keyboardDismissMode="interactive"
                       stickySectionHeadersEnabled={false}
+                      ListHeaderComponent={
+                        queryPending && sections.length ? (
+                          <ActivityIndicator
+                            accessibilityLabel="Atualizando busca"
+                            color={theme.accent}
+                          />
+                        ) : undefined
+                      }
                       contentContainerStyle={[
                         styles.results,
                         !sections.length && styles.emptyResults,
                       ]}
                       ListEmptyComponent={
-                        (hasQuery || favorites || !!tag) && !ready ? (
+                        (hasQuery || favorites || !!tag) &&
+                        ((!ready && !failed) || queryPending) ? (
                           <ActivityIndicator
                             accessibilityLabel="Buscando entradas"
                             color={theme.accent}
@@ -349,27 +374,65 @@ export function DiarySearch({
                             <Text
                               style={[styles.emptyTitle, { color: theme.ink }]}
                             >
-                              {favorites && !hasQuery && !tag
-                                ? "Seus favoritos"
-                                : hasQuery || tag
-                                  ? "Sem resultados"
-                                  : "Reencontre um pensamento"}
+                              {failed
+                                ? "Não foi possível buscar"
+                                : incomplete
+                                  ? "Busca incompleta"
+                                  : favorites && !hasQuery && !tag
+                                    ? "Seus favoritos"
+                                    : hasQuery || tag
+                                      ? "Sem resultados"
+                                      : "Reencontre um pensamento"}
                             </Text>
                             <Text
                               style={[styles.empty, { color: theme.muted }]}
                             >
                               {emptyText}
                             </Text>
+                            {(failed || incomplete) && (
+                              <Touch
+                                label="Tentar buscar novamente"
+                                onPress={retry}
+                                style={styles.stateAction}
+                              >
+                                <Text style={{ color: theme.accent }}>
+                                  Tentar novamente
+                                </Text>
+                              </Touch>
+                            )}
+                            {(tag || favorites) && (
+                              <Touch
+                                label="Limpar filtros de busca"
+                                onPress={clearFilters}
+                                style={styles.stateAction}
+                              >
+                                <Text style={{ color: theme.accent }}>
+                                  Limpar filtros
+                                </Text>
+                              </Touch>
+                            )}
                           </Animated.View>
                         )
                       }
                       ListFooterComponent={
-                        (hasQuery || favorites || !!tag) &&
-                        ready &&
-                        !!loaded.skipped ? (
-                          <Text style={[styles.empty, { color: theme.muted }]}>
-                            Algumas entradas não puderam ser lidas.
-                          </Text>
+                        incomplete && sections.length > 0 ? (
+                          <View style={styles.emptyState}>
+                            <Text
+                              accessibilityLiveRegion="polite"
+                              style={[styles.empty, { color: theme.muted }]}
+                            >
+                              Algumas entradas não puderam ser lidas.
+                            </Text>
+                            <Touch
+                              label="Tentar ler entradas novamente"
+                              onPress={retry}
+                              style={styles.stateAction}
+                            >
+                              <Text style={{ color: theme.accent }}>
+                                Tentar novamente
+                              </Text>
+                            </Touch>
+                          </View>
                         ) : undefined
                       }
                       renderSectionHeader={({ section }) => (
@@ -384,6 +447,7 @@ export function DiarySearch({
                         <Animated.View entering={fade}>
                           <Pressable
                             accessibilityRole="button"
+                            disabled={queryPending}
                             onPress={() => {
                               Keyboard.dismiss();
                               setReadingOffset(0);
@@ -493,6 +557,11 @@ export function DiarySearch({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  stateAction: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
   sheet: {
     flex: 1,
     paddingHorizontal: 16,

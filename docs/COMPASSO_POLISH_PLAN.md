@@ -105,7 +105,7 @@ Aceite: testes verdes, funcionamento offline e comparação antes/depois. Ganhos
 
 ## Registro de continuidade
 
-- Próxima ação — validar as etapas publicadas no iPhone; continuar a etapa 4 com editor longo, teclado/cursor e estados de filtros e falhas de leitura.
+- Próxima ação — validar no iPhone editor longo, teclado/cursor, filtros e retornos das etapas publicadas; preparar a etapa 5 com regressões e extração do editor preservando seus contratos.
 - Evidência local da base — npm run verify passou com 20 testes na auditoria de 10/11.
 - Evidência pendente — validação de aparelho dos achados; baseline de performance.
 - Registro por entrega — data, etapa, estado, commit, build/runtime, OTA/EAS, testes e retorno de Juice.
@@ -130,3 +130,10 @@ Verificação local: npm run verify, 29 testes passando. Testes novos cobrem mig
 
 
 Registro da entrega 4a — commit 02e42dc0a9c0562c09dd265c34f28336420d9f7e, build 1.0.0 (4), canal production, runtime 884f76f4decc76733cd4d0770b7173d35bb841a6. OTA publicado: https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/164d0022-4f11-404a-b7d3-ce97d8618e2c. npm run verify passou com 29 testes e a exportação iOS concluiu. A etapa 4 continua Em execução pelas pendências descritas acima. No iPhone: criar continuação de texto/foto, editar e excluir a origem, encerrar/reabrir; testar citações antigas e exclusão em lote; buscar termo no fim de entrada longa; abrir citação pelo resultado e voltar à entrada e à lista no mesmo ponto.
+
+
+Entrega 4b em 10/11/2026 — editor com campo que acompanha o conteúdo e uma rolagem externa com acompanhamento nativo do cursor pelo KeyboardAwareScrollView já instalado. O cabeçalho tem região reservada, a pílula segue o teclado pelo KeyboardStickyView e seu espaço é reservado no conteúdo; a compensação anterior por KeyboardAvoidingView foi removida deste sheet. Texto, foto compacta e tags permanecem no mesmo cartão. O rascunho de Hoje e a confirmação de descarte continuam preservados.
+
+Busca com estados separados de carregamento, atualização da consulta, ausência de resultados, leitura parcial e falha, incluindo nova tentativa. Limpar filtros mantém o termo escrito. O seletor nativo de tags sinaliza o filtro ativo, permite limpar por Todas as entradas e oferece nova tentativa quando a leitura falha. Resultados antigos ficam indisponíveis ao toque durante a atualização da consulta. No calendário, falha em um registro preserva os demais registros legíveis e mostra leitura incompleta; filtro ativo não revela temporariamente o histórico sem filtro enquanto carrega.
+
+npm run verify passou com 32 testes. Regressões novas cobrem combinação de texto/favorito/tag, remoção de filtros preservando consulta, agrupamento por dia e leitura com registros ausentes ou inválidos. O comportamento de cursor, teclado, seleção e movimento depende do aceite no iPhone; nenhum ganho de performance foi declarado. Roteiro: editar/pastar texto maior que a tela, mover cursor ao início/meio/fim, ampliar fonte, anexar foto e editar tags, recolher e reabrir teclado, cancelar e retomar; testar favoritos vazios, tag sem resultados, limpar filtro e alternar buscar/favoritos.

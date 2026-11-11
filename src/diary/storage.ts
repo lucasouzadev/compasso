@@ -6,7 +6,12 @@ import {
   moveAsync,
   writeAsStringAsync,
 } from "expo-file-system/legacy";
-import { entryDayFromId, entrySchema, type Entry } from "./entries";
+import {
+  entryDayFromId,
+  entrySchema,
+  readAvailableEntries,
+  type Entry,
+} from "./entries";
 
 const root = () => new Directory(Paths.document, "compasso-entries");
 const draftRoot = () => new Directory(Paths.document, "compasso-drafts");
@@ -156,6 +161,10 @@ export function readDay(ids: readonly string[]) {
       (a, b) =>
         b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
     );
+}
+
+export function readDayResult(ids: readonly string[]) {
+  return readAvailableEntries(ids, readEntry);
 }
 
 export async function readSearchEntries(

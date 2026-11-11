@@ -136,3 +136,25 @@ export function diarySearchExcerpt(text: string, query: string, limit = 180) {
     .trim();
   return `${start ? "…" : ""}${excerpt}${start + limit < text.length ? "…" : ""}`;
 }
+
+export function readAvailableEntries(
+  ids: readonly string[],
+  read: (id: string) => Entry | undefined,
+) {
+  const entries: Entry[] = [];
+  let skipped = 0;
+  for (const id of ids) {
+    try {
+      const entry = read(id);
+      if (entry) entries.push(entry);
+      else skipped++;
+    } catch {
+      skipped++;
+    }
+  }
+  entries.sort(
+    (a, b) =>
+      b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+  );
+  return { entries, skipped };
+}

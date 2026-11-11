@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ActivityIndicator,
   Image,
   Platform,
   FlatList,
@@ -34,7 +35,7 @@ import { DiaryTagFilter, DiaryTagMenu } from "./DiaryTagFilter";
 import {
   entryPhotoUri,
   findDayPhoto,
-  readDay,
+  readDayResult,
   readSearchEntries,
 } from "./storage";
 
@@ -67,24 +68,48 @@ export function DiaryCalendar({
   const { height, fontScale } = useWindowDimensions();
   const [showTags, setShowTags] = useState(false);
   const [tag, setTag] = useState<string>();
+  const [tagAttempt, setTagAttempt] = useState(0);
+  const [tagFailure, setTagFailure] = useState<{
+    source: typeof index;
+    attempt: number;
+  }>();
   const [loadedTags, setLoadedTags] = useState<{
     source: typeof index;
+    attempt: number;
+    skipped: number;
     entries: Entry[];
   }>();
   const tagEntries =
-    loadedTags?.source === index ? loadedTags.entries : undefined;
+    loadedTags?.source === index && loadedTags.attempt === tagAttempt
+      ? loadedTags.entries
+      : undefined;
+  const tagFailed =
+    tagFailure?.source === index && tagFailure.attempt === tagAttempt;
+  const retryTags = () => setTagAttempt((current) => current + 1);
   useEffect(() => {
     if ((Platform.OS === "web" && !showTags && !tag) || tagEntries) return;
     const abort = new AbortController();
-    void readSearchEntries(index, abort.signal).then(({ entries }) => {
-      if (!abort.signal.aborted) setLoadedTags({ source: index, entries });
-    });
+    void readSearchEntries(index, abort.signal)
+      .then(({ entries, skipped }) => {
+        if (!abort.signal.aborted)
+          setLoadedTags({
+            source: index,
+            attempt: tagAttempt,
+            entries,
+            skipped,
+          });
+      })
+      .catch(() => {
+        if (!abort.signal.aborted)
+          setTagFailure({ source: index, attempt: tagAttempt });
+      });
     return () => abort.abort();
-  }, [index, showTags, tag, tagEntries]);
+  }, [index, showTags, tag, tagEntries, tagAttempt]);
 
   const tags = useMemo(() => collectDiaryTags(tagEntries ?? []), [tagEntries]);
   const visibleIndex = useMemo(() => {
-    if (!tag || !tagEntries) return index;
+    if (!tag) return index;
+    if (!tagEntries) return new Map([...index].map(([day]) => [day, []]));
     const ids = new Set(
       tagEntries
         .filter((entry) => matchesDiaryTag(entry, tag))
@@ -131,13 +156,14 @@ export function DiaryCalendar({
     });
     return () => abort.abort();
   }, [visibleIndex, monthKey]);
-  const entries = useMemo(() => {
-    try {
-      return readDay(visibleIndex.get(selected) ?? []);
-    } catch {
-      return [];
-    }
-  }, [visibleIndex, selected]);
+  const dayResult = useMemo(
+    () => readDayResult(visibleIndex.get(selected) ?? []),
+    // Retrying must reread files even when the directory index is unchanged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleIndex, selected, tagAttempt],
+  );
+  const entries = dayResult.entries;
+  const incomplete = dayResult.skipped > 0 || (!!tag && !!loadedTags?.skipped);
   const detail = entries.find((entry) => entry.id === detailId);
   const closeDetail = () => setDetailId(undefined);
   const dismiss = detail ? closeDetail : onClose;
@@ -295,6 +321,11 @@ export function DiaryCalendar({
                               tags={tags}
                               selected={tag}
                               ready={!!tagEntries}
+                              error={
+                                tagFailed ||
+                                (!!tagEntries && !!loadedTags?.skipped)
+                              }
+                              onRetry={retryTags}
                               onSelect={setTag}
                             />
                           )}
@@ -452,10 +483,46 @@ export function DiaryCalendar({
                           );
                         }}
                       />
+                    ) : tag && !tagEntries && !tagFailed ? (
+                      <ActivityIndicator
+                        accessibilityLabel="Filtrando calendário"
+                        color={theme.ink}
+                      />
                     ) : (
-                      <Text style={styles.empty}>
-                        Nenhuma entrada neste dia.
+                      <Text
+                        accessibilityLiveRegion="polite"
+                        style={styles.empty}
+                      >
+                        {tagFailed && tag
+                          ? "Não foi possível carregar o filtro."
+                          : incomplete
+                            ? "Leitura incompleta: algumas entradas não puderam ser lidas."
+                            : tag
+                              ? `Nenhuma entrada com #${tag} neste dia.`
+                              : "Nenhuma entrada neste dia."}
                       </Text>
+                    )}
+                    {(incomplete || (tagFailed && !!tag)) && (
+                      <Touch
+                        label="Tentar ler o calendário novamente"
+                        onPress={retryTags}
+                        style={styles.retry}
+                      >
+                        <Text style={styles.empty}>
+                          {entries.length
+                            ? "Leitura incompleta · Tentar novamente"
+                            : "Tentar novamente"}
+                        </Text>
+                      </Touch>
+                    )}
+                    {!!tag && !entries.length && (
+                      <Touch
+                        label="Limpar filtro do calendário"
+                        onPress={() => setTag(undefined)}
+                        style={styles.retry}
+                      >
+                        <Text style={styles.empty}>Limpar filtro #{tag}</Text>
+                      </Touch>
                     )}
                   </Animated.View>
                 </Animated.View>
@@ -516,6 +583,7 @@ export function DiaryCalendar({
 }
 
 const styles = StyleSheet.create({
+  retry: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   position: { position: "absolute", left: 16, right: 16 },
   grow: { flex: 1 },
   calendarFill: { backgroundColor: theme.paper },

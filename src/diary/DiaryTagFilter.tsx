@@ -62,12 +62,16 @@ export function DiaryTagMenu({
   onSelect,
   ready,
   iconOnly = false,
+  error = false,
+  onRetry,
 }: {
   tags: string[];
   selected?: string;
   onSelect: (tag?: string) => void;
   ready: boolean;
   iconOnly?: boolean;
+  error?: boolean;
+  onRetry?: () => void;
 }) {
   const theme = useGlassTheme();
   const label = selected ? `Filtrar por tag, #${selected}` : "Filtrar por tag";
@@ -75,13 +79,17 @@ export function DiaryTagMenu({
     <MenuView
       style={iconOnly ? styles.iconMenu : styles.subtitleMenu}
       actions={[
-        { id: "", title: "Todas as entradas", state: selected ? "off" : "on" },
+        {
+          id: "all",
+          title: "Todas as entradas",
+          state: selected ? "off" : "on",
+        },
         ...tags.map((tag) => ({
-          id: tag,
+          id: `tag:${tag}`,
           title: `#${tag}`,
           state: selected === tag ? ("on" as const) : ("off" as const),
         })),
-        ...(!tags.length
+        ...(!tags.length && !error
           ? [
               {
                 title: ready ? "Nenhuma tag no diário" : "Carregando tags…",
@@ -89,9 +97,18 @@ export function DiaryTagMenu({
               },
             ]
           : []),
+        ...(error
+          ? [{ id: "retry", title: "Tentar carregar tags novamente" }]
+          : []),
       ]}
       onPressAction={({ nativeEvent }) => {
-        onSelect(nativeEvent.event || undefined);
+        if (nativeEvent.event === "retry") onRetry?.();
+        else
+          onSelect(
+            nativeEvent.event.startsWith("tag:")
+              ? nativeEvent.event.slice(4)
+              : undefined,
+          );
         void selectionAsync().catch(() => {});
       }}
     >
@@ -99,6 +116,8 @@ export function DiaryTagMenu({
         accessible
         accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityState={{ busy: !ready && !error, selected: !!selected }}
+        accessibilityHint="Escolha uma tag ou Todas as entradas para limpar o filtro"
         style={iconOnly ? styles.iconTrigger : styles.subtitleTrigger}
       >
         {iconOnly && (
@@ -111,6 +130,9 @@ export function DiaryTagMenu({
           size={iconOnly ? 18 : 12}
           color={selected ? theme.accent : theme.muted}
         />
+        {iconOnly && !!selected && (
+          <View style={[styles.activeDot, { backgroundColor: theme.accent }]} />
+        )}
         {!iconOnly && (
           <>
             <Text
@@ -131,6 +153,14 @@ export function DiaryTagMenu({
 }
 
 const styles = StyleSheet.create({
+  activeDot: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
   iconMenu: { width: 44, height: 44 },
   iconTrigger: {
     width: 44,
