@@ -17,7 +17,7 @@ A auditoria de 10/11 identificou sete achados P01–P07 e um inventário de vidr
 | 1 | Proteger rascunhos e edições | Rascunho restaurado após encerrar o app; cancelar câmera mantém conteúdo; edição alterada tem saída segura | Publicada para teste |
 | 2 | Estabilizar compositor, vidro e menus | Repetir 0:49 e 2:49 do vídeo sem manchas; menu respeita cabeçalho; compositor mantém âncora | Publicada para teste |
 | 3 | Uniformizar materiais e feedback | Bandeja +, Guardar, ferramentas e remoções têm estados legíveis e resposta consistente | Publicada para teste |
-| 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Em execução |
+| 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Publicada para teste |
 | 5 | Consolidar arquitetura e medir performance | Testes de fluxo, componentes com responsabilidades claras e comparação antes/depois no aparelho | Pendente |
 | 6 | Aceite final no iPhone | Roteiro completo aprovado, sem defeitos críticos ou altos pendentes | Pendente |
 
@@ -137,3 +137,6 @@ Entrega 4b em 10/11/2026 — editor com campo que acompanha o conteúdo e uma ro
 Busca com estados separados de carregamento, atualização da consulta, ausência de resultados, leitura parcial e falha, incluindo nova tentativa. Limpar filtros mantém o termo escrito. O seletor nativo de tags sinaliza o filtro ativo, permite limpar por Todas as entradas e oferece nova tentativa quando a leitura falha. Resultados antigos ficam indisponíveis ao toque durante a atualização da consulta. No calendário, falha em um registro preserva os demais registros legíveis e mostra leitura incompleta; filtro ativo não revela temporariamente o histórico sem filtro enquanto carrega.
 
 npm run verify passou com 32 testes. Regressões novas cobrem combinação de texto/favorito/tag, remoção de filtros preservando consulta, agrupamento por dia e leitura com registros ausentes ou inválidos. O comportamento de cursor, teclado, seleção e movimento depende do aceite no iPhone; nenhum ganho de performance foi declarado. Roteiro: editar/pastar texto maior que a tela, mover cursor ao início/meio/fim, ampliar fonte, anexar foto e editar tags, recolher e reabrir teclado, cancelar e retomar; testar favoritos vazios, tag sem resultados, limpar filtro e alternar buscar/favoritos.
+
+
+Registro da entrega 4b — commit 9512ac04e04750e67b99d08ced7b8e69ac2adef3, build 1.0.0 (4), canal production, runtime 884f76f4decc76733cd4d0770b7173d35bb841a6. OTA publicado: https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/b0d6b7e9-dbfe-4c3a-8a05-14141142e2ca. Verificação local: tipos, lint e 32 testes; exportação iOS concluída. Etapa 4 publicada para teste, com aceite no iPhone pendente conforme o roteiro acima. A próxima etapa técnica é consolidar arquitetura e medir performance sem ampliar os recursos do produto.
