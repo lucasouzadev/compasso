@@ -32,7 +32,6 @@ import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import {
   GlassSurface,
   useGlassTheme,
-  useNativeGlass,
 } from "../cookbooks/zest/components/ui/GlassSurface";
 import { theme } from "../cookbooks/zest/theme";
 import { collectDiaryTags, matchesDiaryTag, type Entry } from "./entries";
@@ -71,7 +70,6 @@ export function DiaryCalendar({
 }) {
   const insets = useSafeAreaInsets();
   const { accent } = useGlassTheme();
-  const glass = useNativeGlass();
   const { height, fontScale } = useWindowDimensions();
   const [showTags, setShowTags] = useState(false);
   const [tag, setTag] = useState<string>();
@@ -269,12 +267,12 @@ export function DiaryCalendar({
           panel,
         ]}
       >
-        <View
-          style={[
-            styles.panel,
-            glass && !hasDetail ? styles.calendarTint : styles.calendarFill,
-          ]}
-        >
+        <View style={[styles.panel, hasDetail && styles.calendarFill]}>
+          {!hasDetail && (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <GlassSurface materialize={0} style={styles.panel} />
+            </View>
+          )}
           <View
             style={styles.grow}
             pointerEvents={detail ? "none" : "auto"}
@@ -598,7 +596,6 @@ const styles = StyleSheet.create({
   retry: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   position: { position: "absolute", left: 16, right: 16 },
   grow: { flex: 1 },
-  calendarTint: { backgroundColor: "#FFF9EDED" },
   calendarFill: { backgroundColor: theme.paper },
   detailBackdrop: { zIndex: 1 },
   detailOverlay: { zIndex: 2 },

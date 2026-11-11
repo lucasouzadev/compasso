@@ -1840,6 +1840,12 @@ export function DiaryScreen() {
               }
             >
               <View style={styles.attachmentPanel}>
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  <GlassSurface
+                    visible={attachmentsOpen}
+                    style={styles.attachmentGlass}
+                  />
+                </View>
                 <Animated.View style={attachmentHandle}>
                   <GestureDetector gesture={pullTray}>
                     <Pressable
@@ -2466,8 +2472,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 28,
     borderCurve: "continuous",
-    backgroundColor: "#FFF9EF",
   },
+  attachmentGlass: { flex: 1, borderRadius: 28 },
   plus: {
     width: 44,
     height: 44,
