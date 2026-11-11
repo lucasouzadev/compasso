@@ -602,6 +602,8 @@ export function DiaryScreen() {
   );
   const calendarProgress = useSharedValue(0);
   const attachmentReserve = useSharedValue(0);
+  const attachmentTarget = useSharedValue(defaultAttachmentHeight);
+  const attachmentActionsHeight = useSharedValue(80);
   const dragStartHeight = useSharedValue(0);
   const { height: keyboardHeight, progress: keyboardProgress } =
     useReanimatedKeyboardAnimation();
@@ -613,6 +615,19 @@ export function DiaryScreen() {
   });
   const attachmentPanel = useAnimatedStyle(() => ({
     height: attachmentInset.get(),
+  }));
+  const attachmentContents = useAnimatedStyle(() => {
+    // Fade the group before the shrinking viewport reaches the labels.
+    const fadeEnd = Math.min(
+      attachmentTarget.get() - 24,
+      8 + 44 + attachmentActionsHeight.get() + 12,
+    );
+    return {
+      opacity: Math.max(0, Math.min(1, (attachmentInset.get() - fadeEnd) / 24)),
+    };
+  });
+  const attachmentHandle = useAnimatedStyle(() => ({
+    opacity: Math.max(0, Math.min(1, (attachmentInset.get() - 24) / 20)),
   }));
   const readingInset = useDerivedValue(() =>
     showComposer
@@ -1041,6 +1056,7 @@ export function DiaryScreen() {
       keyboardSize > 0
         ? Math.max(0, keyboardSize - insets.bottom)
         : defaultAttachmentHeight;
+    if (open) attachmentTarget.set(target);
     if (open && visibleHeight > 0) {
       // Reserve the keyboard's full lift before starting its dismissal.
       attachmentReserve.set(target);
@@ -1816,7 +1832,7 @@ export function DiaryScreen() {
               )}
             </GlassSurface>
             <Animated.View
-              style={[styles.panelClip, attachmentPanel]}
+              style={attachmentPanel}
               pointerEvents={attachmentsOpen ? "auto" : "none"}
               accessibilityElementsHidden={!attachmentsOpen}
               importantForAccessibility={
@@ -1824,62 +1840,68 @@ export function DiaryScreen() {
               }
             >
               <View style={styles.attachmentPanel}>
-                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                  <GlassSurface materialize={0} style={styles.trayGlass} />
-                </View>
-                <GestureDetector gesture={pullTray}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Fechar anexos"
-                    onPress={closeAttachments}
-                    style={styles.panelGrabber}
-                  >
-                    <View style={styles.panelHandle} />
-                  </Pressable>
-                </GestureDetector>
-                <ScrollView
-                  style={styles.fill}
-                  contentContainerStyle={styles.attachmentActions}
+                <Animated.View style={attachmentHandle}>
+                  <GestureDetector gesture={pullTray}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Fechar anexos"
+                      onPress={closeAttachments}
+                      style={styles.panelGrabber}
+                    >
+                      <View style={styles.panelHandle} />
+                    </Pressable>
+                  </GestureDetector>
+                </Animated.View>
+                <Animated.ScrollView
+                  style={[styles.fill, attachmentContents]}
+                  contentContainerStyle={styles.attachmentScroll}
                   showsVerticalScrollIndicator={false}
                 >
-                  <Touch
-                    label="Escolher foto"
-                    onPress={() => void attachPhoto(false)}
-                    style={styles.attachmentAction}
-                    disabled={saving || picking}
+                  <View
+                    style={styles.attachmentActions}
+                    onLayout={({ nativeEvent }) =>
+                      attachmentActionsHeight.set(nativeEvent.layout.height)
+                    }
                   >
-                    <Symbol
-                      name="photo.on.rectangle"
-                      size={24}
-                      color={theme.ink}
-                    />
-                    <Text style={styles.trayLabel}>Fotos</Text>
-                  </Touch>
-                  <Touch
-                    label="Tirar foto"
-                    onPress={() => void attachPhoto(true)}
-                    style={styles.attachmentAction}
-                    disabled={saving || picking}
-                  >
-                    <Symbol name="camera" size={24} color={theme.ink} />
-                    <Text style={styles.trayLabel}>Câmera</Text>
-                  </Touch>
-                  {textRecognition && (
                     <Touch
-                      label="Capturar texto pela câmera"
-                      onPress={() => void attachPhoto(true, "text")}
+                      label="Escolher foto"
+                      onPress={() => void attachPhoto(false)}
                       style={styles.attachmentAction}
                       disabled={saving || picking}
                     >
                       <Symbol
-                        name="text.viewfinder"
+                        name="photo.on.rectangle"
                         size={24}
                         color={theme.ink}
                       />
-                      <Text style={styles.trayLabel}>Ler texto</Text>
+                      <Text style={styles.trayLabel}>Fotos</Text>
                     </Touch>
-                  )}
-                </ScrollView>
+                    <Touch
+                      label="Tirar foto"
+                      onPress={() => void attachPhoto(true)}
+                      style={styles.attachmentAction}
+                      disabled={saving || picking}
+                    >
+                      <Symbol name="camera" size={24} color={theme.ink} />
+                      <Text style={styles.trayLabel}>Câmera</Text>
+                    </Touch>
+                    {textRecognition && (
+                      <Touch
+                        label="Capturar texto pela câmera"
+                        onPress={() => void attachPhoto(true, "text")}
+                        style={styles.attachmentAction}
+                        disabled={saving || picking}
+                      >
+                        <Symbol
+                          name="text.viewfinder"
+                          size={24}
+                          color={theme.ink}
+                        />
+                        <Text style={styles.trayLabel}>Ler texto</Text>
+                      </Touch>
+                    )}
+                  </View>
+                </Animated.ScrollView>
               </View>
             </Animated.View>
           </KeyboardStickyView>
@@ -2439,14 +2461,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   trayLabel: { color: theme.ink, fontSize: 14, fontWeight: "600" },
-  panelClip: { overflow: "hidden", borderRadius: 28 },
   attachmentPanel: {
     flex: 1,
     marginTop: 8,
     borderRadius: 28,
-    padding: 12,
+    borderCurve: "continuous",
+    backgroundColor: "#FFF9EF",
   },
-  trayGlass: { flex: 1, borderRadius: 28 },
   plus: {
     width: 44,
     height: 44,
@@ -2460,19 +2481,21 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#A8A99F",
   },
-  attachmentActions: {
+  attachmentScroll: {
     flexGrow: 1,
-    paddingBottom: 18,
+    justifyContent: "center",
+    paddingBottom: 12,
+  },
+  attachmentActions: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 18,
+    gap: 12,
     alignItems: "center",
   },
   attachmentAction: {
     width: 86,
     minHeight: 72,
     borderRadius: 18,
-    backgroundColor: "#F2DAD34D",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,

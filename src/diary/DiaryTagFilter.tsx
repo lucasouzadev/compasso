@@ -1,11 +1,30 @@
+import { Button, Host, Image, Menu } from "@expo/ui/swift-ui";
+import {
+  accessibilityLabel,
+  buttonBorderShape,
+  buttonStyle,
+  controlSize,
+  disabled,
+  foregroundStyle,
+  frame,
+  menuIndicator,
+} from "@expo/ui/swift-ui/modifiers";
 import { MenuView } from "@expo/ui/community/menu";
 import { selectionAsync } from "expo-haptics";
 import { Symbol } from "../cookbooks/zest/components/ui/Touch";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import Animated, { FadeIn, ReduceMotion } from "react-native-reanimated";
 import {
   GlassSurface,
   useGlassTheme,
+  useNativeGlass,
 } from "../cookbooks/zest/components/ui/GlassSurface";
 
 const reveal = FadeIn.duration(140).reduceMotion(ReduceMotion.System);
@@ -61,7 +80,6 @@ export function DiaryTagMenu({
   selected,
   onSelect,
   ready,
-  iconOnly = false,
   error = false,
   onRetry,
 }: {
@@ -69,15 +87,65 @@ export function DiaryTagMenu({
   selected?: string;
   onSelect: (tag?: string) => void;
   ready: boolean;
-  iconOnly?: boolean;
   error?: boolean;
   onRetry?: () => void;
 }) {
   const theme = useGlassTheme();
+  const glass = useNativeGlass();
   const label = selected ? `Filtrar por tag, #${selected}` : "Filtrar por tag";
+  const color = selected ? theme.accent : theme.ink;
+  const choose = (tag?: string) => {
+    onSelect(tag);
+    void selectionAsync().catch(() => {});
+  };
+  const empty = ready ? "Nenhuma tag no diário" : "Carregando tags…";
+  const retry = "Tentar carregar tags novamente";
+  if (Platform.OS === "ios") {
+    return (
+      <Host colorScheme="light" ignoreSafeArea="all" style={styles.iconMenu}>
+        <Menu
+          label={
+            <Image
+              systemName="line.3.horizontal.decrease"
+              size={20}
+              modifiers={[
+                frame({ width: 14, height: 14 }),
+                foregroundStyle(color),
+              ]}
+            />
+          }
+          modifiers={[
+            buttonStyle(glass ? "glass" : "bordered"),
+            buttonBorderShape("circle"),
+            controlSize("large"),
+            menuIndicator("hidden"),
+            accessibilityLabel(label),
+          ]}
+        >
+          <Button
+            label="Todas as entradas"
+            systemImage={selected ? undefined : "checkmark"}
+            onPress={() => choose()}
+          />
+          {tags.map((tag) => (
+            <Button
+              key={tag}
+              label={`#${tag}`}
+              systemImage={selected === tag ? "checkmark" : undefined}
+              onPress={() => choose(tag)}
+            />
+          ))}
+          {!tags.length && !error && (
+            <Button label={empty} modifiers={[disabled(true)]} />
+          )}
+          {error && <Button label={retry} onPress={onRetry} />}
+        </Menu>
+      </Host>
+    );
+  }
   return (
     <MenuView
-      style={iconOnly ? styles.iconMenu : styles.subtitleMenu}
+      style={styles.iconMenu}
       actions={[
         {
           id: "all",
@@ -90,98 +158,42 @@ export function DiaryTagMenu({
           state: selected === tag ? ("on" as const) : ("off" as const),
         })),
         ...(!tags.length && !error
-          ? [
-              {
-                title: ready ? "Nenhuma tag no diário" : "Carregando tags…",
-                attributes: { disabled: true },
-              },
-            ]
+          ? [{ title: empty, attributes: { disabled: true } }]
           : []),
-        ...(error
-          ? [{ id: "retry", title: "Tentar carregar tags novamente" }]
-          : []),
+        ...(error ? [{ id: "retry", title: retry }] : []),
       ]}
       onPressAction={({ nativeEvent }) => {
         if (nativeEvent.event === "retry") onRetry?.();
         else
-          onSelect(
+          choose(
             nativeEvent.event.startsWith("tag:")
               ? nativeEvent.event.slice(4)
               : undefined,
           );
-        void selectionAsync().catch(() => {});
       }}
     >
       <View
         accessible
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityState={{ busy: !ready && !error, selected: !!selected }}
-        accessibilityHint="Escolha uma tag ou Todas as entradas para limpar o filtro"
-        style={iconOnly ? styles.iconTrigger : styles.subtitleTrigger}
+        style={styles.iconTrigger}
       >
-        {iconOnly && (
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <GlassSurface materialize={0} style={styles.iconGlass} />
-          </View>
-        )}
-        <Symbol
-          name="line.3.horizontal.decrease"
-          size={iconOnly ? 18 : 12}
-          color={selected ? theme.accent : theme.muted}
-        />
-        {iconOnly && !!selected && (
-          <View style={[styles.activeDot, { backgroundColor: theme.accent }]} />
-        )}
-        {!iconOnly && (
-          <>
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.subtitleText,
-                { color: selected ? theme.accent : theme.muted },
-              ]}
-            >
-              {selected ? `#${selected}` : "Filtrar por tag"}
-            </Text>
-            <Symbol name="chevron.down" size={10} color={theme.muted} />
-          </>
-        )}
+        <Symbol name="line.3.horizontal.decrease" size={20} color={color} />
       </View>
     </MenuView>
   );
 }
 
 const styles = StyleSheet.create({
-  activeDot: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-  },
-  iconMenu: { width: 44, height: 44 },
+  iconMenu: { width: 44, height: 44, overflow: "visible" },
   iconTrigger: {
     width: 44,
     height: 44,
-    justifyContent: "center",
+    borderRadius: 22,
+    backgroundColor: "#F8F8F7",
     alignItems: "center",
+    justifyContent: "center",
   },
-  iconGlass: { flex: 1, borderRadius: 22 },
-  subtitleMenu: {
-    alignSelf: "flex-start",
-    maxWidth: "100%",
-    marginBottom: -15,
-  },
-  subtitleTrigger: {
-    minHeight: 44,
-    paddingTop: 2,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-  },
-  subtitleText: { flexShrink: 1, fontSize: 12 },
   surface: { borderRadius: 22 },
   selected: {
     position: "absolute",

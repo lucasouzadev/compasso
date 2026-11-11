@@ -226,7 +226,6 @@ export function DiarySearch({
                     error={failed || incomplete}
                     onRetry={retry}
                     onSelect={setTag}
-                    iconOnly
                   />
                 ) : (
                   <View style={styles.headerSpacer} />

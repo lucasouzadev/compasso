@@ -28,7 +28,12 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { dayKey, monthCells, parseDay } from "../cookbooks/zest/data/diary";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
-import { GlassSurface } from "../cookbooks/zest/components/ui/GlassSurface";
+import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
+import {
+  GlassSurface,
+  useGlassTheme,
+  useNativeGlass,
+} from "../cookbooks/zest/components/ui/GlassSurface";
 import { theme } from "../cookbooks/zest/theme";
 import { collectDiaryTags, matchesDiaryTag, type Entry } from "./entries";
 import { DiaryTagFilter, DiaryTagMenu } from "./DiaryTagFilter";
@@ -65,6 +70,8 @@ export function DiaryCalendar({
   onOpenDay: (day: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { accent } = useGlassTheme();
+  const glass = useNativeGlass();
   const { height, fontScale } = useWindowDimensions();
   const [showTags, setShowTags] = useState(false);
   const [tag, setTag] = useState<string>();
@@ -262,96 +269,99 @@ export function DiaryCalendar({
           panel,
         ]}
       >
-        <View style={[styles.panel, hasDetail && styles.calendarFill]}>
-          {!hasDetail && (
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <GlassSurface materialize={0} style={styles.panel} />
-            </View>
-          )}
+        <View
+          style={[
+            styles.panel,
+            glass && !hasDetail ? styles.calendarTint : styles.calendarFill,
+          ]}
+        >
           <View
-            style={styles.viewport}
+            style={styles.grow}
             pointerEvents={detail ? "none" : "auto"}
             accessibilityElementsHidden={!!detail}
             importantForAccessibility={detail ? "no-hide-descendants" : "auto"}
           >
+            <GestureDetector gesture={pull}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Fechar calendário"
+                onPress={onClose}
+                style={styles.grabber}
+              >
+                <View style={styles.handle} />
+              </Pressable>
+            </GestureDetector>
             <GestureDetector gesture={scroll}>
               <ScrollView
-                style={styles.unclipped}
+                style={styles.calendarScroll}
                 alwaysBounceVertical
                 directionalLockEnabled
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.content}
               >
-                <GestureDetector gesture={pull}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Fechar calendário"
-                    onPress={onClose}
-                    style={styles.grabber}
-                  >
-                    <View style={styles.handle} />
-                  </Pressable>
-                </GestureDetector>
                 <Animated.View style={monthSlide}>
                   <GestureDetector gesture={monthSwipe}>
                     <View>
                       <View style={[styles.monthRow, styles.monthHeader]}>
-                        <View style={styles.monthHeading}>
-                          <Text
-                            accessibilityRole="header"
-                            style={styles.monthTitle}
+                        <Text
+                          accessibilityRole="header"
+                          style={styles.monthTitle}
+                        >
+                          {month.toLocaleDateString("pt-BR", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </Text>
+                        <GlassSurface
+                          materialize={0}
+                          style={styles.monthControls}
+                        >
+                          <Touch
+                            label="Mês anterior"
+                            onPress={() => stepMonth(-1)}
+                            style={styles.monthButton}
                           >
-                            {month.toLocaleDateString("pt-BR", {
-                              month: "long",
-                              year: "numeric",
-                            })}
-                          </Text>
-                          {Platform.OS === "web" ? (
-                            <Touch
-                              label="Filtrar por tag"
-                              onPress={() => setShowTags(!showTags)}
-                              style={styles.tagToggle}
-                            >
-                              <Text style={styles.tagText}>
-                                {tag ? `#${tag}` : "Filtrar por tag"}
-                              </Text>
-                            </Touch>
-                          ) : (
-                            <DiaryTagMenu
-                              tags={tags}
-                              selected={tag}
-                              ready={!!tagEntries}
-                              error={
-                                tagFailed ||
-                                (!!tagEntries && !!loadedTags?.skipped)
-                              }
-                              onRetry={retryTags}
-                              onSelect={setTag}
+                            <Symbol
+                              name="chevron.left"
+                              size={16}
+                              color={theme.ink}
                             />
-                          )}
-                        </View>
-                        <Touch
-                          label="Mês anterior"
-                          onPress={() => stepMonth(-1)}
-                          style={styles.monthButton}
-                        >
-                          <Symbol
-                            name="chevron.left"
-                            size={15}
-                            color={theme.ink}
+                          </Touch>
+                          <Touch
+                            label="Próximo mês"
+                            onPress={() => stepMonth(1)}
+                            style={styles.monthButton}
+                          >
+                            <Symbol
+                              name="chevron.right"
+                              size={16}
+                              color={theme.ink}
+                            />
+                          </Touch>
+                        </GlassSurface>
+                        {Platform.OS === "web" ? (
+                          <GlassButton
+                            name="line.3.horizontal.decrease"
+                            label={
+                              tag
+                                ? `Filtrar por tag, #${tag}`
+                                : "Filtrar por tag"
+                            }
+                            onPress={() => setShowTags(!showTags)}
                           />
-                        </Touch>
-                        <Touch
-                          label="Próximo mês"
-                          onPress={() => stepMonth(1)}
-                          style={styles.monthButton}
-                        >
-                          <Symbol
-                            name="chevron.right"
-                            size={15}
-                            color={theme.ink}
+                        ) : (
+                          <DiaryTagMenu
+                            tags={tags}
+                            selected={tag}
+                            ready={!!tagEntries}
+                            error={
+                              tagFailed ||
+                              (!!tagEntries && !!loadedTags?.skipped)
+                            }
+                            onRetry={retryTags}
+                            onSelect={setTag}
                           />
-                        </Touch>
+                        )}
                       </View>
                       {Platform.OS === "web" && showTags && (
                         <DiaryTagFilter
@@ -405,12 +415,20 @@ export function DiaryCalendar({
                                   style={[
                                     styles.day,
                                     day === today && styles.today,
+                                    (count > 0 || day === today) && {
+                                      color: accent,
+                                    },
                                   ]}
                                 >
                                   {parseDay(day).getDate()}
                                 </Text>
                                 {!thumbnail && count > 0 && (
-                                  <View style={styles.dot} />
+                                  <View
+                                    style={[
+                                      styles.dot,
+                                      { backgroundColor: accent },
+                                    ]}
+                                  />
                                 )}
                               </Pressable>
                             );
@@ -432,17 +450,11 @@ export function DiaryCalendar({
                         {selected === today ? "Hoje" : fullDate(selected)}
                       </Text>
                       {canOpenDay && (
-                        <Touch
+                        <GlassButton
+                          name="arrow.right"
                           label="Abrir página do dia"
                           onPress={() => onOpenDay(selected)}
-                          style={styles.monthButton}
-                        >
-                          <Symbol
-                            name="arrow.right"
-                            size={17}
-                            color={theme.ink}
-                          />
-                        </Touch>
+                        />
                       )}
                     </View>
                     {entries.length ? (
@@ -586,6 +598,7 @@ const styles = StyleSheet.create({
   retry: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   position: { position: "absolute", left: 16, right: 16 },
   grow: { flex: 1 },
+  calendarTint: { backgroundColor: "#FFF9EDED" },
   calendarFill: { backgroundColor: theme.paper },
   detailBackdrop: { zIndex: 1 },
   detailOverlay: { zIndex: 2 },
@@ -603,7 +616,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.faint,
   },
   panel: { flex: 1, borderRadius: 36 },
-  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 38 },
+  calendarScroll: { marginHorizontal: -16 },
+  content: { paddingHorizontal: 32, paddingTop: 2, paddingBottom: 26 },
   viewport: {
     flex: 1,
     borderRadius: 36,
@@ -611,16 +625,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   unclipped: { overflow: "visible" },
-  monthHeading: { flex: 1 },
-  monthTitle: { fontSize: 22, fontWeight: "600", color: theme.ink },
-  tagToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    minHeight: 44,
-  },
-  tagText: { flexShrink: 1, color: theme.muted, fontSize: 13 },
-  monthHeader: { alignItems: "flex-start", marginBottom: 12 },
+  monthTitle: { flex: 1, fontSize: 20, fontWeight: "600", color: theme.ink },
+  monthHeader: { marginBottom: 12, gap: 6 },
+  monthControls: { flexDirection: "row", borderRadius: 22 },
   monthButton: {
     width: 44,
     height: 44,
@@ -655,14 +662,14 @@ const styles = StyleSheet.create({
   day: { color: theme.ink, fontSize: 14 },
   today: { fontWeight: "700" },
   thumbnail: { width: 22, height: 22, borderRadius: 5 },
-  dot: { width: 5, height: 5, borderRadius: 3, backgroundColor: theme.accent },
+  dot: { width: 5, height: 5, borderRadius: 3 },
   dayFooter: {
     marginTop: 8,
     paddingTop: 10,
   },
   date: { marginBottom: 8, fontSize: 16, fontWeight: "600", color: theme.ink },
-  carousel: { height: 64, marginHorizontal: -16 },
-  previews: { gap: 8, paddingHorizontal: 18, alignItems: "center" },
+  carousel: { height: 64, marginHorizontal: -32 },
+  previews: { gap: 8, paddingHorizontal: 32, alignItems: "center" },
   preview: {
     width: 100,
     minHeight: 58,
