@@ -81,7 +81,8 @@ import { dayKey, parseDay } from "../cookbooks/zest/data/diary";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import { ZestChatScroll } from "../cookbooks/zest/components/ChatScroll";
 import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
-import { Symbol } from "../cookbooks/zest/components/ui/Touch";
+import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
+import { DiarySaveButton } from "./DiarySaveButton";
 import {
   GlassSurface,
   GlassThemeProvider,
@@ -1790,9 +1791,16 @@ export function DiaryScreen() {
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel="Remover foto"
-                        onPress={() => setPhoto(undefined)}
+                        onPress={() => {
+                          void selectionAsync().catch(() => {});
+                          setPhoto(undefined);
+                        }}
                         disabled={saving}
-                        style={[styles.dismiss, styles.photoDismiss]}
+                        style={({ pressed }) => [
+                          styles.dismiss,
+                          styles.photoDismiss,
+                          pressed && styles.pressedControl,
+                        ]}
                       >
                         <View style={styles.photoDismissIcon}>
                           <Symbol
@@ -1805,12 +1813,11 @@ export function DiaryScreen() {
                     </Animated.View>
                   )}
                   <View style={styles.actions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
+                    <Touch
+                      expanded={attachmentsOpen}
+                      label={
                         attachmentsOpen ? "Voltar ao teclado" : "Abrir anexos"
                       }
-                      accessibilityState={{ expanded: attachmentsOpen }}
                       onPress={() => {
                         if (attachmentsOpen) focusComposer();
                         else {
@@ -1826,17 +1833,12 @@ export function DiaryScreen() {
                         size={21}
                         color={theme.ink}
                       />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
+                    </Touch>
+                    <DiarySaveButton
                       onPress={save}
                       disabled={disabled}
-                      style={[styles.save, disabled && styles.disabled]}
-                    >
-                      <Text style={styles.saveLabel}>
-                        {saving ? "Guardando…" : "Guardar"}
-                      </Text>
-                    </Pressable>
+                      saving={saving}
+                    />
                   </View>
                 </View>
               </Animated.View>
@@ -1869,6 +1871,9 @@ export function DiaryScreen() {
               }
             >
               <View style={styles.attachmentPanel}>
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  <GlassSurface materialize={0} style={styles.trayGlass} />
+                </View>
                 <GestureDetector gesture={pullTray}>
                   <Pressable
                     accessibilityRole="button"
@@ -1884,50 +1889,44 @@ export function DiaryScreen() {
                   contentContainerStyle={styles.attachmentActions}
                   showsVerticalScrollIndicator={false}
                 >
-                  <Pressable
-                    accessibilityRole="button"
+                  <Touch
+                    label="Escolher foto"
                     onPress={() => void attachPhoto(false)}
                     style={styles.attachmentAction}
+                    disabled={saving || picking}
                   >
                     <Symbol
                       name="photo.on.rectangle"
                       size={24}
-                      color={theme.onHeavy}
+                      color={theme.ink}
                     />
                     <Text style={styles.trayLabel}>Fotos</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
+                  </Touch>
+                  <Touch
+                    label="Tirar foto"
                     onPress={() => void attachPhoto(true)}
                     style={styles.attachmentAction}
+                    disabled={saving || picking}
                   >
-                    <Symbol name="camera" size={24} color={theme.onHeavy} />
+                    <Symbol name="camera" size={24} color={theme.ink} />
                     <Text style={styles.trayLabel}>Câmera</Text>
-                  </Pressable>
+                  </Touch>
                   {textRecognition && (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Capturar texto pela câmera"
+                    <Touch
+                      label="Capturar texto pela câmera"
                       onPress={() => void attachPhoto(true, "text")}
                       style={styles.attachmentAction}
-                      disabled={picking}
+                      disabled={saving || picking}
                     >
                       <Symbol
                         name="text.viewfinder"
                         size={24}
-                        color={theme.onHeavy}
+                        color={theme.ink}
                       />
                       <Text style={styles.trayLabel}>Ler texto</Text>
-                    </Pressable>
+                    </Touch>
                   )}
                 </ScrollView>
-                <ProgressiveBlur
-                  singlePass
-                  edge="bottom"
-                  height={24}
-                  tint="dark"
-                  color={theme.heavy}
-                />
               </View>
             </Animated.View>
           </KeyboardStickyView>
@@ -2084,9 +2083,8 @@ export function DiaryScreen() {
                             materialize={0}
                             style={styles.editorToolbarGlass}
                           >
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel={
+                            <Touch
+                              label={
                                 editing.photo ? "Trocar foto" : "Escolher foto"
                               }
                               disabled={saving || picking}
@@ -2098,10 +2096,9 @@ export function DiaryScreen() {
                                 size={20}
                                 color={theme.ink}
                               />
-                            </Pressable>
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel="Tirar foto"
+                            </Touch>
+                            <Touch
+                              label="Tirar foto"
                               disabled={saving || picking}
                               onPress={() => void attachPhoto(true, "editor")}
                               style={styles.editorButton}
@@ -2111,11 +2108,10 @@ export function DiaryScreen() {
                                 size={20}
                                 color={theme.ink}
                               />
-                            </Pressable>
+                            </Touch>
                             {editing.photo && (
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="Remover foto"
+                              <Touch
+                                label="Remover foto"
                                 disabled={saving || picking}
                                 onPress={() =>
                                   setEditing(
@@ -2133,7 +2129,7 @@ export function DiaryScreen() {
                                   size={18}
                                   color={interfaceRed}
                                 />
-                              </Pressable>
+                              </Touch>
                             )}
                           </GlassSurface>
                         </Animated.View>
@@ -2475,15 +2471,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  trayLabel: { color: theme.onHeavy, fontSize: 14, fontWeight: "600" },
+  trayLabel: { color: theme.ink, fontSize: 14, fontWeight: "600" },
   panelClip: { overflow: "hidden", borderRadius: 28 },
   attachmentPanel: {
     flex: 1,
     marginTop: 8,
     borderRadius: 28,
     padding: 12,
-    backgroundColor: theme.heavy,
   },
+  trayGlass: { flex: 1, borderRadius: 28 },
   plus: {
     width: 44,
     height: 44,
@@ -2509,7 +2505,7 @@ const styles = StyleSheet.create({
     width: 86,
     minHeight: 72,
     borderRadius: 18,
-    backgroundColor: "#3C3E37",
+    backgroundColor: "#F2DAD34D",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
@@ -2544,6 +2540,7 @@ const styles = StyleSheet.create({
   attachment: { alignSelf: "flex-start", marginLeft: 4 },
   thumbnail: { width: 88, height: 88, borderRadius: 12 },
   photoDismiss: { position: "absolute", top: 0, right: 0 },
+  pressedControl: { opacity: 0.65, transform: [{ scale: 0.94 }] },
   photoDismissIcon: {
     width: 24,
     height: 24,
@@ -2561,13 +2558,5 @@ const styles = StyleSheet.create({
   },
   control: { minHeight: 44, justifyContent: "center", paddingHorizontal: 6 },
   action: { color: theme.ink, fontSize: 14, fontWeight: "600" },
-  save: {
-    minHeight: 44,
-    justifyContent: "center",
-    borderRadius: 20,
-    backgroundColor: theme.heavy,
-    paddingHorizontal: 18,
-  },
   disabled: { backgroundColor: theme.muted },
-  saveLabel: { color: theme.onHeavy, fontSize: 15, fontWeight: "600" },
 });

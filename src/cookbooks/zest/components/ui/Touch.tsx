@@ -47,6 +47,7 @@ export function Touch({
   style,
   testID,
   disabled = false,
+  expanded,
   expand = false,
   surfacePress,
 }: React.PropsWithChildren<{
@@ -56,6 +57,7 @@ export function Touch({
   style?: StyleProp<ViewStyle>;
   testID?: string;
   disabled?: boolean;
+  expanded?: boolean;
   expand?: boolean;
   surfacePress?: SharedValue<number>;
 }>) {
@@ -126,7 +128,7 @@ export function Touch({
           accessible
           accessibilityRole="button"
           accessibilityLabel={label}
-          accessibilityState={{ disabled }}
+          accessibilityState={{ disabled, expanded }}
           onAccessibilityTap={activate}
           testID={testID}
           style={[style, animated]}
@@ -141,7 +143,7 @@ export function Touch({
       style={flex ? { flex } : undefined}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, expanded }}
       testID={testID}
       disabled={disabled}
       onLongPress={onLongPress}
