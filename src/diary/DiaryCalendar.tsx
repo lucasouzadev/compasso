@@ -28,6 +28,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { dayKey, monthCells, parseDay } from "../cookbooks/zest/data/diary";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
+import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import {
   GlassSurface,
@@ -274,7 +275,7 @@ export function DiaryCalendar({
             </View>
           )}
           <View
-            style={styles.grow}
+            style={styles.viewport}
             pointerEvents={detail ? "none" : "auto"}
             accessibilityElementsHidden={!!detail}
             importantForAccessibility={detail ? "no-hide-descendants" : "auto"}
@@ -289,255 +290,243 @@ export function DiaryCalendar({
                 <View style={styles.handle} />
               </Pressable>
             </GestureDetector>
-            <GestureDetector gesture={scroll}>
-              <ScrollView
-                style={styles.calendarScroll}
-                alwaysBounceVertical
-                directionalLockEnabled
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.content}
-              >
-                <Animated.View style={monthSlide}>
-                  <GestureDetector gesture={monthSwipe}>
-                    <View>
-                      <View style={[styles.monthRow, styles.monthHeader]}>
-                        <Text
-                          accessibilityRole="header"
-                          style={styles.monthTitle}
-                        >
-                          {month.toLocaleDateString("pt-BR", {
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </Text>
-                        <GlassSurface
-                          materialize={0}
-                          style={styles.monthControls}
-                        >
-                          <Touch
-                            label="Mês anterior"
-                            onPress={() => stepMonth(-1)}
-                            style={styles.monthButton}
-                          >
-                            <Symbol
-                              name="chevron.left"
-                              size={16}
-                              color={theme.ink}
-                            />
-                          </Touch>
-                          <Touch
-                            label="Próximo mês"
-                            onPress={() => stepMonth(1)}
-                            style={styles.monthButton}
-                          >
-                            <Symbol
-                              name="chevron.right"
-                              size={16}
-                              color={theme.ink}
-                            />
-                          </Touch>
-                        </GlassSurface>
-                        {Platform.OS === "web" ? (
-                          <GlassButton
-                            name="line.3.horizontal.decrease"
-                            label={
-                              tag
-                                ? `Filtrar por tag, #${tag}`
-                                : "Filtrar por tag"
-                            }
-                            onPress={() => setShowTags(!showTags)}
-                          />
-                        ) : (
-                          <DiaryTagMenu
+            <View style={[styles.monthRow, styles.monthHeader]}>
+              <Text accessibilityRole="header" style={styles.monthTitle}>
+                {month.toLocaleDateString("pt-BR", {
+                  month: "long",
+                  year: "numeric",
+                })}
+              </Text>
+              <GlassSurface materialize={0} style={styles.monthControls}>
+                <Touch
+                  label="Mês anterior"
+                  onPress={() => stepMonth(-1)}
+                  style={styles.monthButton}
+                >
+                  <Symbol name="chevron.left" size={16} color={theme.ink} />
+                </Touch>
+                <Touch
+                  label="Próximo mês"
+                  onPress={() => stepMonth(1)}
+                  style={styles.monthButton}
+                >
+                  <Symbol name="chevron.right" size={16} color={theme.ink} />
+                </Touch>
+              </GlassSurface>
+              {Platform.OS === "web" ? (
+                <GlassButton
+                  name="line.3.horizontal.decrease"
+                  label={tag ? `Filtrar por tag, #${tag}` : "Filtrar por tag"}
+                  onPress={() => setShowTags(!showTags)}
+                />
+              ) : (
+                <DiaryTagMenu
+                  tags={tags}
+                  selected={tag}
+                  ready={!!tagEntries}
+                  error={tagFailed || (!!tagEntries && !!loadedTags?.skipped)}
+                  onRetry={retryTags}
+                  onSelect={setTag}
+                />
+              )}
+            </View>
+            <View style={styles.grow}>
+              <GestureDetector gesture={scroll}>
+                <ScrollView
+                  style={styles.grow}
+                  alwaysBounceVertical
+                  directionalLockEnabled
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.content}
+                >
+                  <Animated.View style={monthSlide}>
+                    <GestureDetector gesture={monthSwipe}>
+                      <View>
+                        {Platform.OS === "web" && showTags && (
+                          <DiaryTagFilter
                             tags={tags}
                             selected={tag}
-                            ready={!!tagEntries}
-                            error={
-                              tagFailed ||
-                              (!!tagEntries && !!loadedTags?.skipped)
-                            }
-                            onRetry={retryTags}
                             onSelect={setTag}
                           />
                         )}
-                      </View>
-                      {Platform.OS === "web" && showTags && (
-                        <DiaryTagFilter
-                          tags={tags}
-                          selected={tag}
-                          onSelect={setTag}
-                        />
-                      )}
-                      <View style={styles.row}>
-                        {weekdays.map((day, index) => (
-                          <Text key={index} style={styles.weekday}>
-                            {day}
-                          </Text>
-                        ))}
-                      </View>
-                      {Array.from({ length: 6 }, (_, row) => (
-                        <View key={row} style={styles.row}>
-                          {weekdays.map((_, column) => {
-                            const day = cells[row * 7 + column];
-                            const cell = [
-                              styles.cell,
-                              compact && styles.compactCell,
-                            ];
-                            if (!day) return <View key={column} style={cell} />;
-                            const count = visibleIndex.get(day)?.length ?? 0;
-                            const thumbnail = previews.get(day);
-                            return (
-                              <Pressable
-                                key={day}
-                                accessibilityRole="button"
-                                accessibilityState={{
-                                  selected: day === selected,
-                                }}
-                                accessibilityLabel={`${fullDate(day)}, ${count} entradas`}
-                                onPress={() => {
-                                  if (day !== selected) void selectionAsync();
-                                  setSelected(day);
-                                }}
-                                style={[
-                                  cell,
-                                  day === selected && styles.selected,
-                                ]}
-                              >
-                                {thumbnail && (
-                                  <Image
-                                    source={{ uri: thumbnail }}
-                                    style={styles.thumbnail}
-                                  />
-                                )}
-                                <Text
+                        <View style={styles.row}>
+                          {weekdays.map((day, index) => (
+                            <Text key={index} style={styles.weekday}>
+                              {day}
+                            </Text>
+                          ))}
+                        </View>
+                        {Array.from({ length: 6 }, (_, row) => (
+                          <View key={row} style={styles.row}>
+                            {weekdays.map((_, column) => {
+                              const day = cells[row * 7 + column];
+                              const cell = [
+                                styles.cell,
+                                compact && styles.compactCell,
+                              ];
+                              if (!day)
+                                return <View key={column} style={cell} />;
+                              const count = visibleIndex.get(day)?.length ?? 0;
+                              const thumbnail = previews.get(day);
+                              return (
+                                <Pressable
+                                  key={day}
+                                  accessibilityRole="button"
+                                  accessibilityState={{
+                                    selected: day === selected,
+                                  }}
+                                  accessibilityLabel={`${fullDate(day)}, ${count} entradas`}
+                                  onPress={() => {
+                                    if (day !== selected) void selectionAsync();
+                                    setSelected(day);
+                                  }}
                                   style={[
-                                    styles.day,
-                                    day === today && styles.today,
-                                    (count > 0 || day === today) && {
-                                      color: accent,
-                                    },
+                                    cell,
+                                    day === selected && styles.selected,
                                   ]}
                                 >
-                                  {parseDay(day).getDate()}
-                                </Text>
-                                {!thumbnail && count > 0 && (
-                                  <View
+                                  {thumbnail && (
+                                    <Image
+                                      source={{ uri: thumbnail }}
+                                      style={styles.thumbnail}
+                                    />
+                                  )}
+                                  <Text
                                     style={[
-                                      styles.dot,
-                                      { backgroundColor: accent },
+                                      styles.day,
+                                      day === today && styles.today,
+                                      (count > 0 || day === today) && {
+                                        color: accent,
+                                      },
                                     ]}
+                                  >
+                                    {parseDay(day).getDate()}
+                                  </Text>
+                                  {!thumbnail && count > 0 && (
+                                    <View
+                                      style={[
+                                        styles.dot,
+                                        { backgroundColor: accent },
+                                      ]}
+                                    />
+                                  )}
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ))}
+                      </View>
+                    </GestureDetector>
+                    <Animated.View
+                      key={selected}
+                      entering={reveal}
+                      style={styles.dayFooter}
+                    >
+                      <View style={styles.monthRow}>
+                        <Text
+                          accessibilityRole="header"
+                          style={[styles.date, styles.grow]}
+                        >
+                          {selected === today ? "Hoje" : fullDate(selected)}
+                        </Text>
+                        {canOpenDay && (
+                          <GlassButton
+                            name="arrow.right"
+                            label="Abrir página do dia"
+                            onPress={() => onOpenDay(selected)}
+                          />
+                        )}
+                      </View>
+                      {entries.length ? (
+                        <FlatList
+                          horizontal
+                          style={styles.carousel}
+                          removeClippedSubviews={false}
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.previews}
+                          data={entries}
+                          keyExtractor={(entry) => entry.id}
+                          renderItem={({ item: entry }) => {
+                            const photo = entryPhotoUri(entry);
+                            return (
+                              <Pressable
+                                key={entry.id}
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                  entry.text || "Abrir foto da entrada"
+                                }
+                                onPress={() => setDetailId(entry.id)}
+                                style={styles.preview}
+                              >
+                                {photo ? (
+                                  <Image
+                                    source={{ uri: photo }}
+                                    style={styles.previewPhoto}
                                   />
+                                ) : (
+                                  <Text
+                                    numberOfLines={2}
+                                    style={styles.previewText}
+                                  >
+                                    {entry.text}
+                                  </Text>
                                 )}
                               </Pressable>
                             );
-                          })}
-                        </View>
-                      ))}
-                    </View>
-                  </GestureDetector>
-                  <Animated.View
-                    key={selected}
-                    entering={reveal}
-                    style={styles.dayFooter}
-                  >
-                    <View style={styles.monthRow}>
-                      <Text
-                        accessibilityRole="header"
-                        style={[styles.date, styles.grow]}
-                      >
-                        {selected === today ? "Hoje" : fullDate(selected)}
-                      </Text>
-                      {canOpenDay && (
-                        <GlassButton
-                          name="arrow.right"
-                          label="Abrir página do dia"
-                          onPress={() => onOpenDay(selected)}
+                          }}
                         />
-                      )}
-                    </View>
-                    {entries.length ? (
-                      <FlatList
-                        horizontal
-                        style={[styles.carousel, styles.unclipped]}
-                        removeClippedSubviews={false}
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.previews}
-                        data={entries}
-                        keyExtractor={(entry) => entry.id}
-                        renderItem={({ item: entry }) => {
-                          const photo = entryPhotoUri(entry);
-                          return (
-                            <Pressable
-                              key={entry.id}
-                              accessibilityRole="button"
-                              accessibilityLabel={
-                                entry.text || "Abrir foto da entrada"
-                              }
-                              onPress={() => setDetailId(entry.id)}
-                              style={styles.preview}
-                            >
-                              {photo ? (
-                                <Image
-                                  source={{ uri: photo }}
-                                  style={styles.previewPhoto}
-                                />
-                              ) : (
-                                <Text
-                                  numberOfLines={2}
-                                  style={styles.previewText}
-                                >
-                                  {entry.text}
-                                </Text>
-                              )}
-                            </Pressable>
-                          );
-                        }}
-                      />
-                    ) : tag && !tagEntries && !tagFailed ? (
-                      <ActivityIndicator
-                        accessibilityLabel="Filtrando calendário"
-                        color={theme.ink}
-                      />
-                    ) : (
-                      <Text
-                        accessibilityLiveRegion="polite"
-                        style={styles.empty}
-                      >
-                        {tagFailed && tag
-                          ? "Não foi possível carregar o filtro."
-                          : incomplete
-                            ? "Leitura incompleta: algumas entradas não puderam ser lidas."
-                            : tag
-                              ? `Nenhuma entrada com #${tag} neste dia.`
-                              : "Nenhuma entrada neste dia."}
-                      </Text>
-                    )}
-                    {(incomplete || (tagFailed && !!tag)) && (
-                      <Touch
-                        label="Tentar ler o calendário novamente"
-                        onPress={retryTags}
-                        style={styles.retry}
-                      >
-                        <Text style={styles.empty}>
-                          {entries.length
-                            ? "Leitura incompleta · Tentar novamente"
-                            : "Tentar novamente"}
+                      ) : tag && !tagEntries && !tagFailed ? (
+                        <ActivityIndicator
+                          accessibilityLabel="Filtrando calendário"
+                          color={theme.ink}
+                        />
+                      ) : (
+                        <Text
+                          accessibilityLiveRegion="polite"
+                          style={styles.empty}
+                        >
+                          {tagFailed && tag
+                            ? "Não foi possível carregar o filtro."
+                            : incomplete
+                              ? "Leitura incompleta: algumas entradas não puderam ser lidas."
+                              : tag
+                                ? `Nenhuma entrada com #${tag} neste dia.`
+                                : "Nenhuma entrada neste dia."}
                         </Text>
-                      </Touch>
-                    )}
-                    {!!tag && !entries.length && (
-                      <Touch
-                        label="Limpar filtro do calendário"
-                        onPress={() => setTag(undefined)}
-                        style={styles.retry}
-                      >
-                        <Text style={styles.empty}>Limpar filtro #{tag}</Text>
-                      </Touch>
-                    )}
+                      )}
+                      {(incomplete || (tagFailed && !!tag)) && (
+                        <Touch
+                          label="Tentar ler o calendário novamente"
+                          onPress={retryTags}
+                          style={styles.retry}
+                        >
+                          <Text style={styles.empty}>
+                            {entries.length
+                              ? "Leitura incompleta · Tentar novamente"
+                              : "Tentar novamente"}
+                          </Text>
+                        </Touch>
+                      )}
+                      {!!tag && !entries.length && (
+                        <Touch
+                          label="Limpar filtro do calendário"
+                          onPress={() => setTag(undefined)}
+                          style={styles.retry}
+                        >
+                          <Text style={styles.empty}>Limpar filtro #{tag}</Text>
+                        </Touch>
+                      )}
+                    </Animated.View>
                   </Animated.View>
-                </Animated.View>
-              </ScrollView>
-            </GestureDetector>
+                </ScrollView>
+              </GestureDetector>
+              <ProgressiveBlur
+                edge="top"
+                height={18}
+                color={theme.paper}
+                singlePass
+              />
+            </View>
           </View>
         </View>
       </Animated.View>
@@ -566,7 +555,7 @@ export function DiaryCalendar({
             </View>
             <View style={styles.viewport}>
               <ScrollView
-                style={styles.unclipped}
+                style={styles.grow}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.detailContent}
               >
@@ -613,17 +602,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.faint,
   },
   panel: { flex: 1, borderRadius: 36 },
-  calendarScroll: { marginHorizontal: -16 },
-  content: { paddingHorizontal: 32, paddingTop: 2, paddingBottom: 26 },
+  content: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 26 },
   viewport: {
     flex: 1,
     borderRadius: 36,
     borderCurve: "continuous",
     overflow: "hidden",
   },
-  unclipped: { overflow: "visible" },
   monthTitle: { flex: 1, fontSize: 20, fontWeight: "600", color: theme.ink },
-  monthHeader: { marginBottom: 12, gap: 6 },
+  monthHeader: { marginBottom: 0, marginHorizontal: 16, gap: 6 },
   monthControls: { flexDirection: "row", borderRadius: 22 },
   monthButton: {
     width: 44,
@@ -665,8 +652,8 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   date: { marginBottom: 8, fontSize: 16, fontWeight: "600", color: theme.ink },
-  carousel: { height: 64, marginHorizontal: -32 },
-  previews: { gap: 8, paddingHorizontal: 32, alignItems: "center" },
+  carousel: { height: 64, marginHorizontal: -16 },
+  previews: { gap: 8, paddingHorizontal: 16, alignItems: "center" },
   preview: {
     width: 100,
     minHeight: 58,
