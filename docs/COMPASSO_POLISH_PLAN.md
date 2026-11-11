@@ -15,7 +15,7 @@ A auditoria de 10/11 identificou sete achados P01–P07 e um inventário de vidr
 | Etapa | Entrega | Evidência para encerrar | Estado |
 | --- | --- | --- | --- |
 | 1 | Proteger rascunhos e edições | Rascunho restaurado após encerrar o app; cancelar câmera mantém conteúdo; edição alterada tem saída segura | Publicada para teste |
-| 2 | Estabilizar compositor, vidro e menus | Repetir 0:49 e 2:49 do vídeo sem manchas; menu respeita cabeçalho; compositor mantém âncora | Pendente |
+| 2 | Estabilizar compositor, vidro e menus | Repetir 0:49 e 2:49 do vídeo sem manchas; menu respeita cabeçalho; compositor mantém âncora | Publicada para teste |
 | 3 | Uniformizar materiais e feedback | Bandeja +, Guardar, ferramentas e remoções têm estados legíveis e resposta consistente | Pendente |
 | 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Pendente |
 | 5 | Consolidar arquitetura e medir performance | Testes de fluxo, componentes com responsabilidades claras e comparação antes/depois no aparelho | Pendente |
@@ -105,7 +105,7 @@ Aceite: testes verdes, funcionamento offline e comparação antes/depois. Ganhos
 
 ## Registro de continuidade
 
-- Próxima ação — validar a etapa 1 no iPhone e iniciar o diagnóstico de composição da etapa 2.
+- Próxima ação — validar as etapas 1 e 2 no iPhone e preparar os controles e materiais da etapa 3.
 - Evidência local da base — npm run verify passou com 20 testes na auditoria de 10/11.
 - Evidência pendente — validação de aparelho dos achados; baseline de performance.
 - Registro por entrega — data, etapa, estado, commit, build/runtime, OTA/EAS, testes e retorno de Juice.
@@ -116,3 +116,5 @@ Aceite: testes verdes, funcionamento offline e comparação antes/depois. Ganhos
 Entrega da etapa 1 em 10/11/2026. Proteção de rascunhos, fotos duráveis, restauração de foco/edição, confirmação de descarte e identidade estável na gravação. Verificação local com 23 testes; validação no iPhone pendente.
 
 Registro da entrega 1 — commit 49d3ccf714ef87dc8ef95fa52b319db91a6dff90, build 1.0.0 (4), canal production, OTA ff6b20bd-e285-45aa-ba4e-6dc3f29456d5. Link do EAS https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/ff6b20bd-e285-45aa-ba4e-6dc3f29456d5. npm run verify passou com 23 testes. Pendente no iPhone: encerrar/reabrir com foto e citação, cancelar câmera e descartar/retomar edição.
+
+Registro da entrega 2 — commit 3152d0deeb521acda3a21c8597cc479e38dedc7f, build 1.0.0 (4), canal production. OTA https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/8e77681d-711b-4116-a035-cd56c48c2909. Removida a camada mascarada de desfoque atrás do compositor, preservado o vidro nativo, campo ancorado no rodapé vazio e menus com limite de cabeçalho e rolagem das ações em telas menores. npm run verify passou com 25 testes. Pendente no iPhone: manchas sobre fotos, fechamento/abertura de teclado e bandeja, mensagem longa no topo/rodapé, arrasto pelas reações e retorno à mesma mensagem.
