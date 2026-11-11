@@ -1,3 +1,4 @@
+import { entryMenuLayout } from "./menuLayout";
 import {
   BottomSheet,
   Button,
@@ -149,7 +150,6 @@ export type ContextPointer = {
 const cell = 40;
 const row = 44;
 const reactionHeight = 50;
-const gap = 8;
 
 export type DiaryMenuAction = {
   title: string;
@@ -167,6 +167,7 @@ export type DiaryMenuAction = {
 
 export function EntryActions({
   bounds,
+  protectedTop = 0,
   pointer,
   onClose,
   children,
@@ -175,6 +176,7 @@ export function EntryActions({
   actions,
 }: {
   bounds: BubbleBounds;
+  protectedTop?: number;
   pointer: SharedValue<ContextPointer>;
   onClose: () => void;
   children: ReactNode;
@@ -199,18 +201,24 @@ export function EntryActions({
   }, [phase]);
 
   const actionCount = actions.length;
-  const actionsHeight = actionCount * row + 8;
-  const minTop = insets.top + reactionHeight + gap * 2;
-  const bottom = height - insets.bottom - actionsHeight - gap * 2;
-  const previewHeight = Math.min(source.height, Math.max(48, bottom - minTop));
-  const top = Math.max(minTop, Math.min(source.y, bottom - previewHeight));
+  const { top, previewHeight, actionsHeight, contentHeight, railTop, menuTop } =
+    entryMenuLayout({
+      screenHeight: height,
+      safeTop: Math.max(insets.top, protectedTop),
+      safeBottom: insets.bottom,
+      sourceTop: source.y,
+      sourceHeight: source.height,
+      actionCount,
+    });
+  const menuOffset = useSharedValue(0);
+  const menuScroll = useAnimatedScrollHandler(({ contentOffset }) => {
+    menuOffset.set(contentOffset.y);
+  });
   const right = Math.min(width - 10, source.x + source.width);
   const railWidth = Math.min(width - 24, 258);
   const menuWidth = Math.min(width - 24, 258);
   const railLeft = Math.max(12, right - railWidth);
-  const railTop = top - reactionHeight - gap;
   const menuLeft = Math.max(12, right - menuWidth);
-  const menuTop = top + previewHeight + gap;
   const railPadding = 7;
   const emojiViewport = railWidth - cell - 2 * railPadding;
   const railOffset = useSharedValue(0);
@@ -218,7 +226,7 @@ export function EntryActions({
     railOffset.set(contentOffset.x);
   });
   const plusIndex = railEmojis.length;
-  const firstAction = (actionsHeight - actionCount * row) / 2;
+  const firstAction = 4;
   const target = useDerivedValue(() => {
     const point = pointer.get();
     if (point.phase === "idle") return -1;
@@ -237,8 +245,15 @@ export function EntryActions({
       );
     }
     const mx = point.x - menuLeft;
-    const my = point.y - menuTop - firstAction;
-    if (mx >= 0 && mx < menuWidth && my >= 0 && my < actionCount * row) {
+    const my = point.y - menuTop - firstAction + menuOffset.get();
+    if (
+      mx >= 0 &&
+      mx < menuWidth &&
+      point.y >= menuTop &&
+      point.y < menuTop + actionsHeight &&
+      my >= 0 &&
+      my < actionCount * row
+    ) {
       return plusIndex + 1 + Math.floor(my / row);
     }
     return -1;
@@ -454,25 +469,36 @@ export function EntryActions({
             />
           </View>
           <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.menuHighlight,
-                { top: firstAction },
-                menuHighlight,
-              ]}
-            />
-            <Host colorScheme="light" style={styles.actionRows}>
-              <VStack spacing={0}>
-                {actions.map((action) => (
-                  <MenuAction
-                    key={action.icon}
-                    {...action}
-                    onPress={() => close(action.onPress)}
-                  />
-                ))}
-              </VStack>
-            </Host>
+            <Animated.ScrollView
+              onScroll={menuScroll}
+              scrollEventThrottle={16}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              contentContainerStyle={{ height: contentHeight }}
+            >
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.menuHighlight,
+                  { top: firstAction },
+                  menuHighlight,
+                ]}
+              />
+              <Host
+                colorScheme="light"
+                style={[styles.actionRows, { height: contentHeight }]}
+              >
+                <VStack spacing={0}>
+                  {actions.map((action) => (
+                    <MenuAction
+                      key={action.icon}
+                      {...action}
+                      onPress={() => close(action.onPress)}
+                    />
+                  ))}
+                </VStack>
+              </Host>
+            </Animated.ScrollView>
           </Animated.View>
         </Animated.View>
         <EmojiSheet
@@ -702,7 +728,7 @@ const styles = StyleSheet.create({
     position: "absolute",
   },
   railGlass: { flex: 1, borderRadius: 25 },
-  actionRows: { flex: 1, justifyContent: "center" },
+  actionRows: { justifyContent: "center" },
   actionsGlass: { flex: 1, borderRadius: 20 },
   railContent: { flex: 1, flexDirection: "row", alignItems: "center" },
   emojiStrip: { flexDirection: "row" },

@@ -583,7 +583,7 @@ function loadJournal(): {
 
 export function DiaryScreen() {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const expandedWidth = width - 32;
   const [{ index, status: indexStatus }, setJournal] = useState(loadJournal);
   const [today, setToday] = useState(dayKey);
@@ -623,6 +623,7 @@ export function DiaryScreen() {
   const [arriving, setArriving] = useState<string>();
   const [newIdeas, setNewIdeas] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(88);
+  const [focusHeaderHeight, setFocusHeaderHeight] = useState(72);
   const [editorHeaderHeight, setEditorHeaderHeight] = useState(62);
   const [inputHeight, setInputHeight] = useState(inputMinimum);
   const [composerHeight, setComposerHeight] = useState(composerMinimum);
@@ -666,9 +667,6 @@ export function DiaryScreen() {
       ? attachmentInset.get() + Math.max(0, surfaceHeight.get() - compactHeight)
       : 0,
   );
-  const dockBlur = useAnimatedStyle(() => ({
-    transform: [{ translateY: -attachmentInset.get() }],
-  }));
   const surface = useAnimatedStyle(() => ({
     height: surfaceHeight.get(),
     width: expandedWidth * (1 - 0.14 * compactProgress.get()),
@@ -676,15 +674,11 @@ export function DiaryScreen() {
   const expandedContents = useAnimatedStyle(() => ({
     opacity: 1 - compactProgress.get(),
   }));
-  const emptyCenter = useSharedValue(0);
   const dock = useAnimatedStyle(() => ({
     transform: [
       {
         translateY:
-          calendarProgress.get() * (surfaceHeight.get() + insets.bottom + 34) -
-          emptyCenter.get() *
-            (1 - keyboardProgress.get()) *
-            Math.max(0, (height - surfaceHeight.get()) / 2 - insets.bottom - 8),
+          calendarProgress.get() * (surfaceHeight.get() + insets.bottom + 34),
       },
     ],
   }));
@@ -1372,15 +1366,6 @@ export function DiaryScreen() {
 
   const emptyToday =
     writingToday && entries.length === 0 && status === "ready" && !focused;
-  useEffect(() => {
-    emptyCenter.set(
-      withTiming(
-        emptyToday && !composerFocused && !attachmentsOpen && !calendar ? 1 : 0,
-        { duration: 250, reduceMotion: ReduceMotion.System },
-      ),
-    );
-  }, [attachmentsOpen, calendar, composerFocused, emptyCenter, emptyToday]);
-
   const renderEntry = (entry: Entry, allowSwipe = true) => (
     <EntryCard
       key={entry.id}
@@ -1628,6 +1613,9 @@ export function DiaryScreen() {
               ]}
             />
             <View
+              onLayout={({ nativeEvent }) =>
+                setFocusHeaderHeight(Math.ceil(nativeEvent.layout.height))
+              }
               style={[styles.focusHeader, { top: insets.top }]}
               pointerEvents="box-none"
             >
@@ -1692,23 +1680,6 @@ export function DiaryScreen() {
             offset={{ opened: insets.bottom }}
             style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}
           >
-            {!emptyToday || composerFocused || attachmentsOpen ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[StyleSheet.absoluteFill, dockBlur]}
-              >
-                <ProgressiveBlur
-                  singlePass
-                  edge="bottom"
-                  height={
-                    insets.bottom +
-                    (compact ? compactHeight : composerHeight) +
-                    34
-                  }
-                  color={theme.paper}
-                />
-              </Animated.View>
-            ) : null}
             {newIdeas > 0 && !calendar && !focused && (
               <Animated.View entering={reveal} style={styles.newIdeas}>
                 <GlassSurface interactive style={styles.newIdeasSurface}>
@@ -2234,7 +2205,13 @@ export function DiaryScreen() {
           </Modal>
         )}
         {entryMenu && (
-          <EntryActions {...entryMenu.props} onClose={closeEntryMenu} />
+          <EntryActions
+            {...entryMenu.props}
+            protectedTop={
+              insets.top + (focused ? focusHeaderHeight : headerHeight)
+            }
+            onClose={closeEntryMenu}
+          />
         )}
       </View>
     </GlassThemeProvider>
