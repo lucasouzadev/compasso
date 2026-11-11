@@ -1,7 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Keyboard,
   Modal,
   Platform,
@@ -35,12 +34,14 @@ import {
 import { Symbol } from "../cookbooks/zest/components/ui/Touch";
 import {
   collectDiaryTags,
+  diarySearchExcerpt,
   matchesDiaryTag,
   normalizeDiarySearch,
   type Entry,
 } from "./entries";
 import { DiaryTagFilter, DiaryTagMenu } from "./DiaryTagFilter";
-import { entryPhotoUri, readSearchEntries } from "./storage";
+import { DiaryEntryBody } from "./DiaryEntryBody";
+import { readEntry, readSearchEntries } from "./storage";
 
 const appear = FadeInDown.duration(180).reduceMotion(ReduceMotion.System);
 const fade = FadeIn.duration(160).reduceMotion(ReduceMotion.System);
@@ -71,6 +72,9 @@ export function DiarySearch({
   }));
   const [tag, setTag] = useState<string>();
   const [selected, setSelected] = useState<Entry>();
+  const [history, setHistory] = useState<Entry[]>([]);
+  const [readingOffset, setReadingOffset] = useState(0);
+  const readingOffsets = useRef(new Map<string, number>());
   const [loaded, setLoaded] = useState<{
     source: typeof index;
     rows: { entry: Entry; searchable: string }[];
@@ -124,14 +128,26 @@ export function DiarySearch({
   }, [deferredQuery, favorites, hasQuery, index, loaded, tag]);
 
   function goBack() {
-    if (selected) setSelected(undefined);
+    if (history.length) {
+      const target = history[history.length - 1];
+      setReadingOffset(readingOffsets.current.get(target.id) ?? 0);
+      setSelected(target);
+      setHistory((current) => current.slice(0, -1));
+    } else if (selected) setSelected(undefined);
     else {
       Keyboard.dismiss();
       onClose();
     }
   }
 
-  const photo = selected && entryPhotoUri(selected);
+  let previous: Entry | undefined;
+  if (selected?.continuationOf) {
+    try {
+      previous = readEntry(selected.continuationOf);
+    } catch {
+      // The citation snapshot remains readable when the source is unavailable.
+    }
+  }
   const emptyText =
     favorites && !hasQuery && !tag
       ? "Favorite entradas pelo menu para encontrá-las aqui."
@@ -169,7 +185,13 @@ export function DiarySearch({
               <View style={styles.header}>
                 <GlassButton
                   name={selected ? "chevron.left" : "xmark"}
-                  label={selected ? "Voltar aos resultados" : "Fechar busca"}
+                  label={
+                    history.length
+                      ? "Voltar à entrada"
+                      : selected
+                        ? "Voltar aos resultados"
+                        : "Fechar busca"
+                  }
                   onPress={goBack}
                 />
                 <Text
@@ -364,6 +386,8 @@ export function DiarySearch({
                             accessibilityRole="button"
                             onPress={() => {
                               Keyboard.dismiss();
+                              setReadingOffset(0);
+                              setHistory([]);
                               setSelected(item);
                             }}
                             style={({ pressed }) => [
@@ -397,7 +421,8 @@ export function DiarySearch({
                                 numberOfLines={2}
                                 style={[styles.excerpt, { color: theme.ink }]}
                               >
-                                {item.text || "Foto"}
+                                {diarySearchExcerpt(item.text, deferredQuery) ||
+                                  "Foto"}
                               </Text>
                             </View>
                             <Symbol
@@ -419,6 +444,19 @@ export function DiarySearch({
                 </View>
                 {selected && (
                   <ScrollView
+                    key={selected.id}
+                    contentOffset={{
+                      x: 0,
+                      y: readingOffset,
+                    }}
+                    scrollEventThrottle={16}
+                    onScroll={({ nativeEvent }) =>
+                      readingOffsets.current.set(
+                        selected.id,
+                        nativeEvent.contentOffset.y,
+                      )
+                    }
+                    contentContainerStyle={{ paddingBottom: 24 }}
                     style={[
                       StyleSheet.absoluteFill,
                       { backgroundColor: theme.paper },
@@ -430,20 +468,17 @@ export function DiarySearch({
                     <View
                       style={[styles.entry, { backgroundColor: "#F8DFDB" }]}
                     >
-                      <Text
+                      <DiaryEntryBody
+                        entry={selected}
+                        previous={previous}
                         selectable
-                        style={[styles.excerpt, { color: theme.ink }]}
-                      >
-                        {selected.text}
-                      </Text>
-                      {photo && (
-                        <Image
-                          source={{ uri: photo }}
-                          accessibilityLabel="Foto da entrada"
-                          resizeMode="contain"
-                          style={styles.photo}
-                        />
-                      )}
+                        showFavorite
+                        onOpenOriginal={(source) => {
+                          setReadingOffset(0);
+                          setHistory((current) => [...current, selected]);
+                          setSelected(source);
+                        }}
+                      />
                     </View>
                   </ScrollView>
                 )}

@@ -17,7 +17,7 @@ A auditoria de 10/11 identificou sete achados P01–P07 e um inventário de vidr
 | 1 | Proteger rascunhos e edições | Rascunho restaurado após encerrar o app; cancelar câmera mantém conteúdo; edição alterada tem saída segura | Publicada para teste |
 | 2 | Estabilizar compositor, vidro e menus | Repetir 0:49 e 2:49 do vídeo sem manchas; menu respeita cabeçalho; compositor mantém âncora | Publicada para teste |
 | 3 | Uniformizar materiais e feedback | Bandeja +, Guardar, ferramentas e remoções têm estados legíveis e resposta consistente | Publicada para teste |
-| 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Pendente |
+| 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Em execução |
 | 5 | Consolidar arquitetura e medir performance | Testes de fluxo, componentes com responsabilidades claras e comparação antes/depois no aparelho | Pendente |
 | 6 | Aceite final no iPhone | Roteiro completo aprovado, sem defeitos críticos ou altos pendentes | Pendente |
 
@@ -105,7 +105,7 @@ Aceite: testes verdes, funcionamento offline e comparação antes/depois. Ganhos
 
 ## Registro de continuidade
 
-- Próxima ação — validar as etapas publicadas no iPhone e preparar a consistência de leitura e citações da etapa 4.
+- Próxima ação — validar as etapas publicadas no iPhone; continuar a etapa 4 com editor longo, teclado/cursor e estados de filtros e falhas de leitura.
 - Evidência local da base — npm run verify passou com 20 testes na auditoria de 10/11.
 - Evidência pendente — validação de aparelho dos achados; baseline de performance.
 - Registro por entrega — data, etapa, estado, commit, build/runtime, OTA/EAS, testes e retorno de Juice.
@@ -120,3 +120,10 @@ Registro da entrega 1 — commit 49d3ccf714ef87dc8ef95fa52b319db91a6dff90, build
 Registro da entrega 2 — commit 3152d0deeb521acda3a21c8597cc479e38dedc7f, build 1.0.0 (4), canal production. OTA https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/8e77681d-711b-4116-a035-cd56c48c2909. Removida a camada mascarada de desfoque atrás do compositor, preservado o vidro nativo, campo ancorado no rodapé vazio e menus com limite de cabeçalho e rolagem das ações em telas menores. npm run verify passou com 25 testes. Pendente no iPhone: manchas sobre fotos, fechamento/abertura de teclado e bandeja, mensagem longa no topo/rodapé, arrasto pelas reações e retorno à mesma mensagem.
 
 Registro da entrega 3 — commit a049c72d12dc3e82dac7b86340b73021be318a04, build 1.0.0 (4), canal production. OTA https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/e34f9919-4644-444a-8ad0-e8c1528c5c6f. Bandeja com vidro compartilhado, Guardar com botão nativo preenchido, feedback e hápticos nos controles de anexos/editor e feedback visual na remoção da foto. Setas do calendário já usam Touch. A ação de remover a referência será revista junto com as citações na etapa 4. npm run verify passou com 25 testes. Pendente no iPhone: retorno de seletor, visibilidade/material da bandeja, estados de Guardar, hápticos e preferências de movimento/transparência reduzidos.
+
+
+Entrega parcial da etapa 4 em 10/11/2026 — conteúdo compartilhado entre linha do tempo, calendário, busca e painel da origem. Busca e painel da origem incluem tags, reação, favorito e citação. A busca exibe trecho próximo do termo, com acentos e espaços normalizados, e permite abrir a origem e retornar à entrada anterior, conservando a lista montada e registrando a rolagem dos detalhes.
+
+Citações novas guardam cópia própria da foto. Antes de excluir uma origem, citações antigas recebem instantâneos de texto e foto; falha de leitura, cópia ou publicação retém a origem para nova tentativa. A exclusão da origem preserva o conteúdo citado e mostra sua indisponibilidade separadamente. Ao excluir a própria continuação, sua cópia da foto também é removida. Citações cuja origem já havia sido excluída antes deste ajuste só podem preservar o texto que já estava salvo; fotos já apagadas não podem ser recuperadas.
+
+Verificação local: npm run verify, 29 testes passando. Testes novos cobrem migração de citações antigas, independência da origem editada, nova tentativa, falhas de cópia/publicação e trechos de busca com acentos, quebras de linha e emojis. A extração de leitura preserva os materiais existentes e não adiciona camadas de vidro. Pendentes: aceite visual e retorno de rolagem no iPhone, editor longo e revisão dos estados de filtros/carregamento/falha. Custo de exclusão com histórico grande será medido na etapa 5.

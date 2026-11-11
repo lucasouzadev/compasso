@@ -9,6 +9,10 @@ export const entrySchema = z.object({
   photo: photoName.optional(),
   continuationOf: z.string().optional(),
   quotedText: z.string().optional(),
+  quotedPhotoCopy: z
+    .string()
+    .regex(/^quote\.[a-z0-9]+$/)
+    .optional(),
   quotedPhoto: photoName.nullable().optional(),
   originalText: z.string().optional(),
   reaction: z.string().optional(),
@@ -90,4 +94,45 @@ export function threadEntryIds(
     for (const child of children.get(parent) ?? []) ids.add(child);
   }
   return [...ids];
+}
+
+// Keep an index into the original text while folding accents and whitespace.
+// Searching the folded string directly would shift offsets in decomposed text.
+export function diarySearchExcerpt(text: string, query: string, limit = 180) {
+  const terms = normalizeDiarySearch(query).split(" ").filter(Boolean);
+  if (!terms.length) {
+    const excerpt = text.slice(0, limit).replace(/\s+/gu, " ").trim();
+    return `${excerpt}${text.length > limit ? "…" : ""}`;
+  }
+  let folded = "";
+  const offsets: number[] = [];
+  let offset = 0;
+  for (const character of text) {
+    const normalized = character
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLocaleLowerCase("pt-BR");
+    for (const letter of normalized) {
+      if (/\s/u.test(letter)) {
+        if (folded.endsWith(" ")) continue;
+        folded += " ";
+      } else folded += letter;
+      for (let unit = 0; unit < letter.length; unit++) offsets.push(offset);
+    }
+    offset += character.length;
+  }
+  const matches = terms
+    .map((term) => folded.indexOf(term))
+    .filter((at) => at >= 0);
+  const match = matches.length ? offsets[Math.min(...matches)] : 0;
+  let start = Math.max(0, match - 48);
+  if (start) {
+    const boundary = text.slice(start, match).search(/\s/u);
+    if (boundary >= 0) start += boundary + 1;
+  }
+  const excerpt = text
+    .slice(start, start + limit)
+    .replace(/\s+/gu, " ")
+    .trim();
+  return `${start ? "…" : ""}${excerpt}${start + limit < text.length ? "…" : ""}`;
 }

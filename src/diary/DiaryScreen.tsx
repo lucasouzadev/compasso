@@ -82,6 +82,7 @@ import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import { ZestChatScroll } from "../cookbooks/zest/components/ChatScroll";
 import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
+import { DiaryEntryBody } from "./DiaryEntryBody";
 import { DiarySaveButton } from "./DiarySaveButton";
 import {
   GlassSurface,
@@ -419,65 +420,13 @@ function EntryCard({
     previous && selected === undefined
       ? () => onOpenOriginal(previous)
       : undefined;
-  const missingSource = !!entry.continuationOf && !previous;
-  const quote = missingSource
-    ? "Entrada excluída ou indisponível"
-    : quotedEntryText(entry, previous);
-  const quotedPhoto = missingSource
-    ? undefined
-    : entry.quotedPhoto === undefined
-      ? previous?.photo
-      : entry.quotedPhoto;
-  const quoteUri =
-    entry.continuationOf && quotedPhoto
-      ? entryPhotoUri({ id: entry.continuationOf, photo: quotedPhoto })
-      : undefined;
+  const quote = quotedEntryText(entry, previous);
   const content = (
-    <>
-      {entry.text ? <Text style={styles.body}>{entry.text}</Text> : null}
-      {photo && (
-        <Image
-          accessibilityLabel="Foto da entrada"
-          source={{ uri: photo }}
-          style={styles.photo}
-        />
-      )}
-      {(previous || quote !== undefined || quoteUri) && (
-        <Pressable
-          accessible={false}
-          disabled={!openOriginal}
-          onPress={openOriginal}
-          style={[styles.quote, styles.quotedEntry]}
-        >
-          {quoteUri && (
-            <Image
-              accessibilityLabel="Foto citada"
-              source={{ uri: quoteUri }}
-              style={styles.quoteThumbnail}
-            />
-          )}
-          <View style={styles.replyCopy}>
-            <Text style={styles.muted}>
-              {previous
-                ? `Continuação de ${dateLabel(dayKey(new Date(previous.createdAt)))}`
-                : "Continuação"}
-            </Text>
-            <Text numberOfLines={3} style={styles.replyExcerpt}>
-              {quote || (quoteUri ? "Foto" : "Foto da entrada anterior")}
-            </Text>
-          </View>
-          {openOriginal && (
-            <Symbol name="chevron.right" size={12} color={theme.muted} />
-          )}
-        </Pressable>
-      )}
-      {!!entry.tags?.length && (
-        <Text style={styles.entryTags}>
-          {entry.tags.map((tag) => `#${tag}`).join("  ")}
-        </Text>
-      )}
-      {entry.reaction && <Text style={styles.reaction}>{entry.reaction}</Text>}
-    </>
+    <DiaryEntryBody
+      entry={entry}
+      previous={previous}
+      onOpenOriginal={openOriginal ? onOpenOriginal : undefined}
+    />
   );
   const bubble = (
     <Animated.View
@@ -603,7 +552,6 @@ export function DiaryScreen() {
     recovery.draft?.editing,
   );
   const [original, setOriginal] = useState<Entry>();
-  const originalPhoto = original && entryPhotoUri(original);
   const closeOriginal = () => setOriginal(undefined);
   const [focusSeed, setFocusSeed] = useState<Entry | undefined>(
     recovery.draft?.focus,
@@ -2184,17 +2132,12 @@ export function DiaryScreen() {
                   style={styles.originalContent}
                   contentContainerStyle={styles.originalBody}
                 >
-                  {!!original.text && (
-                    <Text style={styles.body}>{original.text}</Text>
-                  )}
-                  {!!originalPhoto && (
-                    <Image
-                      accessibilityLabel="Foto da entrada original"
-                      source={{ uri: originalPhoto }}
-                      resizeMode="contain"
-                      style={styles.photo}
-                    />
-                  )}
+                  <DiaryEntryBody
+                    entry={original}
+                    previous={quotedSource(original.continuationOf)}
+                    selectable
+                    showFavorite
+                  />
                 </ScrollView>
               </GlassSurface>
             </View>

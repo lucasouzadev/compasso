@@ -1,3 +1,4 @@
+import { protectQuoteSnapshots, quotePhotoName } from "./citations";
 import { createDraftJournal, type DiaryDraft } from "./drafts";
 import { Directory, File, Paths } from "expo-file-system";
 import {
@@ -208,6 +209,16 @@ export function entryPhotoUri(entry: Pick<Entry, "id" | "photo">) {
   return entry.photo ? new File(root(), entry.id, entry.photo).uri : undefined;
 }
 
+export function quotedPhotoUri(entry: Entry, previous?: Entry) {
+  if (entry.quotedPhotoCopy)
+    return new File(root(), entry.id, entry.quotedPhotoCopy).uri;
+  const photo =
+    entry.quotedPhoto === undefined ? previous?.photo : entry.quotedPhoto;
+  return entry.continuationOf && photo
+    ? entryPhotoUri({ id: entry.continuationOf, photo })
+    : undefined;
+}
+
 export async function setEntryReaction(id: string, emoji: string) {
   const entry = readEntry(id);
   if (!entry) throw new Error("Entry unavailable");
@@ -243,11 +254,37 @@ async function saveEntryMetadata(entry: Entry) {
 
 export function deleteEntries(ids: Iterable<string>) {
   const removed = new Set<string>();
+  // Read all dependents before deleting anything; unreadable metadata must not
+  // silently turn a deletion into loss of a surviving citation.
+  let entries: Entry[];
+  try {
+    entries = [...readDayIndex().values()].flatMap((day) => readDay(day));
+  } catch {
+    return removed;
+  }
   for (const id of ids) {
     if (!/^\d+-[a-z0-9]*$/.test(id)) continue;
     try {
       const directory = new Directory(root(), id);
-      if (directory.exists) directory.delete();
+      if (directory.exists) {
+        const source = readEntry(id);
+        if (!source) continue;
+        protectQuoteSnapshots(source, entries, {
+          copy: (parent, photo, child, name) => {
+            const target = new File(root(), child.id, name);
+            if (target.exists) target.delete();
+            new File(root(), parent.id, photo).copy(target);
+          },
+          commit: (child) => {
+            const folder = new Directory(root(), child.id);
+            const next = latestRevision(folder) + 1;
+            const pending = new File(folder, ".quote-pending.json");
+            pending.write(JSON.stringify(child));
+            pending.rename(`revision-${next}.json`);
+          },
+        });
+        directory.delete();
+      }
       removed.add(id);
     } catch {
       // The caller retains failed entries in the selection for retry.
@@ -283,12 +320,20 @@ export async function saveEntry(
     continuationOf: previous?.id,
     quotedText: previous?.text,
     quotedPhoto: previous ? (previous.photo ?? null) : undefined,
+    quotedPhotoCopy: previous?.photo
+      ? quotePhotoName(previous.photo)
+      : undefined,
   };
 
   try {
     if (pending.exists) pending.delete();
     pending.create();
     if (source && photo) await source.copy(new File(pending, photo));
+    if (previous?.photo && entry.quotedPhotoCopy) {
+      new File(root(), previous.id, previous.photo).copy(
+        new File(pending, entry.quotedPhotoCopy),
+      );
+    }
     new File(pending, "entry.json").write(JSON.stringify(entry));
     // Only publish the directory after both the entry and attachment are ready.
     pending.rename(id);
