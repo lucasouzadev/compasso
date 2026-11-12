@@ -21,7 +21,9 @@ Pendente no iPhone: comparar antes/depois usando o mesmo histórico sintético, 
 
 Aceite funcional pendente: bordas do carrossel e desfoque do OTA 63b6a4dc; editor longo com cursor/foto/tags/teclado; retorno ao mesmo ponto; recuperação de rascunho; texto e foto citados após editar/excluir origem. O menu do detalhe do calendário ainda depende da geometria do cabeçalho principal: a data dentro do detalhe não tem proteção própria. Rever a gravação de Juice antes de corrigir a interface; as imagens/vídeo legados deste repositório não são essa referência.
 
-Publicação: EAS CLI retornou `Not logged in`. O fingerprint iOS calculado neste Linux é `90269544546e544a985d514455abd6128d04794d`, idêntico na base e após extração, mas diferente do runtime instalado `884f76f4decc76733cd4d0770b7173d35bb841a6`. Comparar as fontes do fingerprint com a build pelo EAS autenticado antes de publicar; não forçar um runtime nem gerar uma build por essa divergência sem diagnóstico. Nenhum OTA foi publicado neste lote.
+No Windows com Node v22.23.4, `npm run verify` passou com 32 testes. Com 10.000 entradas sintéticas, as medianas foram 13,29 ms para parse e ordenação, 213,22 ms para normalização e 9,76 ms para busca combinada. A comparação de performance no iPhone segue pendente.
+
+A build 1.0.0 (4) e o OTA anterior têm o mesmo runtime `884f76f4decc76733cd4d0770b7173d35bb841a6`. A comparação autenticada no EAS isolou a divergência local ao hash da pasta iOS do módulo de reconhecimento de texto. As versões Git dos arquivos nativos, das dependências e da configuração são idênticas às do commit `f7d8006` da build. A publicação iOS do commit `c4b7bae` usou uma configuração temporária com o runtime confirmado da build 4. O `app.json` versionado mantém a política `fingerprint`. [Build iOS de referência](https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/builds/e2e7a078-3cef-475c-a404-c1759137f797) · [Grupo OTA em production](https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/0b76b7df-dcf8-4f0f-8563-f844f585f1b9).
 
 
 This file records the standalone project checks, separate from the original chat collection's historical QA.
