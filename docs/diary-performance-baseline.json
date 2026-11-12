@@ -1,0 +1,84 @@
+{
+  "recordedAt": "2026-11-12",
+  "baselineCommit": "b59c9d7701c532610910941ddbcc038a35570301",
+  "before": {
+    "node": "v24.22.1",
+    "platform": "linux",
+    "arch": "x64",
+    "samples": 30,
+    "results": [
+      {
+        "count": 1000,
+        "charactersPerEntry": 1093,
+        "parseAndSort": {
+          "medianMs": 0.959,
+          "p95Ms": 1.214
+        },
+        "normalizeSearchRows": {
+          "medianMs": 9.271,
+          "p95Ms": 16.895
+        },
+        "combinedSearch": {
+          "medianMs": 0.216,
+          "p95Ms": 0.349
+        }
+      },
+      {
+        "count": 10000,
+        "charactersPerEntry": 1093,
+        "parseAndSort": {
+          "medianMs": 12.543,
+          "p95Ms": 16.159
+        },
+        "normalizeSearchRows": {
+          "medianMs": 102.663,
+          "p95Ms": 134.452
+        },
+        "combinedSearch": {
+          "medianMs": 2.115,
+          "p95Ms": 2.724
+        }
+      }
+    ]
+  },
+  "afterEditorComposerExtraction": {
+    "node": "v24.22.1",
+    "platform": "linux",
+    "arch": "x64",
+    "samples": 30,
+    "results": [
+      {
+        "count": 1000,
+        "charactersPerEntry": 1093,
+        "parseAndSort": {
+          "medianMs": 0.965,
+          "p95Ms": 1.223
+        },
+        "normalizeSearchRows": {
+          "medianMs": 8.683,
+          "p95Ms": 13.812
+        },
+        "combinedSearch": {
+          "medianMs": 0.21,
+          "p95Ms": 0.31
+        }
+      },
+      {
+        "count": 10000,
+        "charactersPerEntry": 1093,
+        "parseAndSort": {
+          "medianMs": 14.251,
+          "p95Ms": 19.857
+        },
+        "normalizeSearchRows": {
+          "medianMs": 100.261,
+          "p95Ms": 139.867
+        },
+        "combinedSearch": {
+          "medianMs": 2.161,
+          "p95Ms": 2.52
+        }
+      }
+    ]
+  }
+}

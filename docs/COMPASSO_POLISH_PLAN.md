@@ -1,6 +1,6 @@
 # Compasso — plano de polimento
 
-Atualizado em 10 de novembro de 2026.
+Atualizado em 12 de novembro de 2026.
 
 ## Objetivo e base
 
@@ -18,7 +18,7 @@ A auditoria de 10/11 identificou sete achados P01–P07 e um inventário de vidr
 | 2 | Estabilizar compositor, vidro e menus | Repetir 0:49 e 2:49 do vídeo sem manchas; menu respeita cabeçalho; compositor mantém âncora | Publicada para teste |
 | 3 | Uniformizar materiais e feedback | Bandeja +, Guardar, ferramentas e remoções têm estados legíveis e resposta consistente | Publicada para teste |
 | 4 | Fechar leitura, edição, citações e busca | Mesma entrada legível nos diferentes caminhos; texto longo editável; citação e retorno seguem regra única | Publicada para teste |
-| 5 | Consolidar arquitetura e medir performance | Testes de fluxo, componentes com responsabilidades claras e comparação antes/depois no aparelho | Pendente |
+| 5 | Consolidar arquitetura e medir performance | Testes de fluxo, componentes com responsabilidades claras e comparação antes/depois no aparelho | Em execução |
 | 6 | Aceite final no iPhone | Roteiro completo aprovado, sem defeitos críticos ou altos pendentes | Pendente |
 
 Estados usados no plano: Pendente, Em execução, Validada localmente, Publicada para teste, Validada no iPhone e Concluída. A conclusão de cada etapa exige suas evidências locais e de aparelho aplicáveis.
@@ -146,3 +146,10 @@ Teste de Juice no iPhone (10/11/2026). O vídeo mostra abertura e retorno da bus
 Correção publicada no commit e55c6abf14670bb45c438fc0b35b6fbb38044438. Gravações e cópias terminam antes da publicação de arquivos, revisões e exclusão da origem citada. npm run verify passou com 32 testes. OTA iOS production para a build 1.0.0 (4) em https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/b30943d0-711e-44a2-8f78-0c93cd1eca36. Repetir no aparelho o retorno da câmera, a edição do rascunho após reabrir e a persistência de uma edição com foto.
 
 Ajustes das capturas de 10/11/2026. Busca e calendário usam um único menu SwiftUI para o filtro no iOS, com vidro nativo disponível. As setas de mês compartilham uma pílula e a seta do dia tem botão de vidro próprio. A alça do calendário fica fora da rolagem, os dias com registros e Hoje usam o vermelho do Compasso e o carrossel usa a largura da tela. A bandeja de anexos tem fundo fosco sem sombra e os atalhos somem juntos durante a redução de altura. npm run verify passou com 32 testes. Commit 47f0ddbfbb4f2b2b02c4a9294c651f7e5a7c0947, OTA production para a build 1.0.0 (4) em https://expo.dev/accounts/juiceluqi/projects/zest-kcal-tracker-template/updates/645b5138-a6b7-4fa8-9be7-a60cdcca8e7e. Pendente no iPhone: conferir a abertura e o fechamento do filtro, o carrossel nas laterais e a transição entre bandeja e teclado.
+
+
+Retomada em 12/11/2026 — `origin/main` confirmado em b59c9d7701c532610910941ddbcc038a35570301, cópia nova sem mudanças locais. Referência de Juice: OTA 63b6a4dc-87b0-468f-86c4-30f0c5b6d37b, build 1.0.0 (4), production, runtime 884f76f4decc76733cd4d0770b7173d35bb841a6. Carrossel contido no vidro e desfoque curto do calendário aguardam o próximo retorno do iPhone.
+
+Etapa 5, primeiro lote validado localmente: extração de DiaryEditor e do cartão DiaryComposer, mantendo refs, estado, persistência, materiais e teclado nos contratos existentes. Estilos movidos sem alteração de valores. DiaryScreen passa de 2.558 para 1.869 linhas; isso não é evidência de performance. Dock, bandeja e gestos permanecem na tela para extração posterior. JSX comparado por árvore sintática com a base. `npm run verify` passou com 32 testes antes/depois e exportação iOS concluiu. Baseline sintético documentado em [VERIFICATION.md](VERIFICATION.md), sem otimizações. Medições nativas e aceite continuam pendentes.
+
+OTA deste lote bloqueado por ausência de autenticação EAS (`Not logged in`). Fingerprint calculado neste Linux é 90269544546e544a985d514455abd6128d04794d tanto na base quanto no lote; diverge do instalado. A publicação exige comparar as fontes com a build autenticada antes de escolher o runtime. Sem alteração nativa ou dependências; nenhum runtime foi forçado. Menu do calendário: proteção atual usa cabeçalho principal e não reserva a data do detalhe; conferir a gravação antes de mudar sua geometria.

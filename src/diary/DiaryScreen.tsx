@@ -12,7 +12,6 @@ import {
   Alert,
   AppState,
   BackHandler,
-  Image,
   Keyboard,
   Modal,
   Platform,
@@ -22,19 +21,13 @@ import {
   FlatList,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
   type TextInputInstance,
   type FlatListInstance,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  SafeAreaProvider,
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import {
-  KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
   KeyboardController,
   KeyboardEvents,
@@ -46,7 +39,6 @@ import Animated, {
   FadeInRight,
   FadeInDown,
   FadeOut,
-  LinearTransition,
   Easing,
   ReduceMotion,
   useDerivedValue,
@@ -57,11 +49,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { BlurView } from "expo-blur";
 import {
   launchCameraAsync,
@@ -84,12 +72,13 @@ import { ZestChatScroll } from "../cookbooks/zest/components/ChatScroll";
 import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
 import { DiaryEntryBody } from "./DiaryEntryBody";
-import { DiarySaveButton } from "./DiarySaveButton";
 import {
   GlassSurface,
   GlassThemeProvider,
 } from "../cookbooks/zest/components/ui/GlassSurface";
-import { theme as zestTheme } from "../cookbooks/zest/theme";
+import { styles, theme, interfaceRed } from "./diaryStyles";
+import { DiaryEditor } from "./DiaryEditor";
+import { DiaryComposer } from "./DiaryComposer";
 import { DiaryCalendar } from "./DiaryCalendar";
 import { DiarySearch } from "./DiarySearch";
 import {
@@ -145,23 +134,11 @@ const composerMinimum = 108;
 const compactHeight = 48;
 const historyThreshold = 96;
 const bubbleRed = "#F8DFDB";
-const interfaceRed = "#D6281E";
-const theme = {
-  ...zestTheme,
-  paper: "#F7F2E8",
-  ink: "#111111",
-  muted: "#706C67",
-  accent: interfaceRed,
-};
 const motionCurve = Easing.bezier(0.22, 0.7, 0.22, 1);
 const inputMinimum = 42;
-const inputMaximum = 116;
 const defaultAttachmentHeight = 300;
 const readingAnchor = { minIndexForVisible: 0, autoscrollToTopThreshold: 24 };
 const reveal = FadeIn.duration(160).reduceMotion(ReduceMotion.System);
-const editorToolbarTransition = LinearTransition.duration(180).reduceMotion(
-  ReduceMotion.System,
-);
 const hideEmpty = FadeOut.duration(150).reduceMotion(ReduceMotion.System);
 const focusEnter = FadeIn.duration(250).reduceMotion(ReduceMotion.System);
 const focusExit = FadeOut.duration(200).reduceMotion(ReduceMotion.System);
@@ -1676,161 +1653,33 @@ export function DiaryScreen() {
                 </GlassSurface>
               </Animated.View>
             )}
-            <GlassSurface interactive style={[styles.composerSurface, surface]}>
-              <Animated.View
-                style={[styles.composerClip, expandedContents]}
-                pointerEvents={compact ? "none" : "auto"}
-                accessibilityElementsHidden={compact}
-                importantForAccessibility={
-                  compact ? "no-hide-descendants" : "auto"
-                }
-              >
-                <View
-                  style={[styles.composerContents, { width: expandedWidth }]}
-                  onLayout={({ nativeEvent }) => {
-                    const height = Math.max(
-                      composerMinimum,
-                      Math.ceil(nativeEvent.layout.height),
-                    );
-                    setComposerHeight(height);
-                  }}
-                >
-                  <View>
-                    {/* Fabric reports the input's content size during layout. Measuring
-                      the draft separately lets a fixed-height input request more room. */}
-                    <Text
-                      accessible={false}
-                      accessibilityElementsHidden
-                      importantForAccessibility="no-hide-descendants"
-                      pointerEvents="none"
-                      numberOfLines={7}
-                      style={[styles.input, styles.inputMeasure]}
-                      onLayout={({ nativeEvent }) =>
-                        setInputHeight(
-                          Math.max(
-                            inputMinimum,
-                            Math.ceil(nativeEvent.layout.height),
-                          ),
-                        )
-                      }
-                    >
-                      {`${draft}\u200b`}
-                    </Text>
-                    <TextInput
-                      ref={input}
-                      accessibilityLabel="Texto da entrada"
-                      placeholder={
-                        focused
-                          ? "Continue seu pensamento…"
-                          : emptyToday
-                            ? "O que ficou na sua cabeça hoje?"
-                            : "Escreva para você…"
-                      }
-                      placeholderTextColor={theme.muted}
-                      value={draft}
-                      onChangeText={setDraft}
-                      onFocus={() => {
-                        setComposerFocused(true);
-                        if (attachmentsOpen) returnToKeyboard();
-                      }}
-                      onBlur={() => setComposerFocused(false)}
-                      editable={!saving}
-                      multiline
-                      submitBehavior="newline"
-                      keyboardAppearance="light"
-                      selectionColor={interfaceRed}
-                      scrollEnabled={!!draft && inputHeight > inputMaximum}
-                      style={[
-                        styles.input,
-                        {
-                          height: draft
-                            ? Math.min(inputHeight, inputMaximum)
-                            : inputMinimum,
-                        },
-                      ]}
-                    />
-                  </View>
-                  {photo && (
-                    <Animated.View entering={reveal} style={styles.attachment}>
-                      <Image
-                        accessibilityLabel="Prévia da foto"
-                        source={{ uri: photo }}
-                        style={styles.thumbnail}
-                      />
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Remover foto"
-                        onPress={() => {
-                          void selectionAsync().catch(() => {});
-                          setPhoto(undefined);
-                        }}
-                        disabled={saving}
-                        style={({ pressed }) => [
-                          styles.dismiss,
-                          styles.photoDismiss,
-                          pressed && styles.pressedControl,
-                        ]}
-                      >
-                        <View style={styles.photoDismissIcon}>
-                          <Symbol
-                            name="xmark"
-                            size={12}
-                            color={theme.onHeavy}
-                          />
-                        </View>
-                      </Pressable>
-                    </Animated.View>
-                  )}
-                  <View style={styles.actions}>
-                    <Touch
-                      expanded={attachmentsOpen}
-                      label={
-                        attachmentsOpen ? "Voltar ao teclado" : "Abrir anexos"
-                      }
-                      onPress={() => {
-                        if (attachmentsOpen) focusComposer();
-                        else {
-                          showAttachments(true);
-                          Keyboard.dismiss();
-                        }
-                      }}
-                      disabled={saving || picking}
-                      style={styles.plus}
-                    >
-                      <Symbol
-                        name={attachmentsOpen ? "keyboard" : "plus"}
-                        size={21}
-                        color={theme.ink}
-                      />
-                    </Touch>
-                    <DiarySaveButton
-                      onPress={save}
-                      disabled={disabled}
-                      saving={saving}
-                    />
-                  </View>
-                </View>
-              </Animated.View>
-              {compact && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Expandir compositor"
-                  onPress={focusComposer}
-                  style={styles.compactComposer}
-                >
-                  <Symbol
-                    name="square.and.pencil"
-                    size={17}
-                    color={theme.ink}
-                  />
-                  <Text numberOfLines={1} style={styles.action}>
-                    {draft || photo || previous
-                      ? "Continuar rascunho"
-                      : "Escreva para você…"}
-                  </Text>
-                </Pressable>
-              )}
-            </GlassSurface>
+            <DiaryComposer
+              surface={surface}
+              expandedContents={expandedContents}
+              compact={compact}
+              expandedWidth={expandedWidth}
+              setComposerHeight={setComposerHeight}
+              setInputHeight={setInputHeight}
+              draft={draft}
+              input={input}
+              focused={focused}
+              emptyToday={emptyToday}
+              setDraft={setDraft}
+              setComposerFocused={setComposerFocused}
+              attachmentsOpen={attachmentsOpen}
+              returnToKeyboard={returnToKeyboard}
+              saving={saving}
+              inputHeight={inputHeight}
+              photo={photo}
+              reveal={reveal}
+              setPhoto={setPhoto}
+              focusComposer={focusComposer}
+              showAttachments={showAttachments}
+              picking={picking}
+              save={save}
+              disabled={disabled}
+              previous={previous}
+            />
             <Animated.View
               style={attachmentPanel}
               pointerEvents={attachmentsOpen ? "auto" : "none"}
@@ -1930,217 +1779,26 @@ export function DiaryScreen() {
           <DiarySearch index={index} onClose={() => setSearchOpen(false)} />
         )}
         {editing && (
-          <Modal
-            presentationStyle="pageSheet"
-            animationType={reducedMotion ? "none" : "slide"}
-            onShow={() => editorInput.current?.focus()}
-            onRequestClose={closeEditor}
-          >
-            <GestureHandlerRootView style={styles.fill}>
-              <SafeAreaProvider style={styles.editorSurface}>
-                <View onAccessibilityEscape={closeEditor} style={styles.fill}>
-                  <SafeAreaView
-                    edges={{
-                      top: "maximum",
-                      right: "maximum",
-                      bottom: "maximum",
-                      left: "maximum",
-                    }}
-                    style={styles.editor}
-                  >
-                    <View style={styles.editorReadingArea}>
-                      <KeyboardAwareScrollView
-                        ref={editorScroll}
-                        style={{ marginTop: editorHeaderHeight, flex: 1 }}
-                        bottomOffset={editorToolbarHeight + 16}
-                        disableScrollOnKeyboardHide
-                        alwaysBounceVertical={false}
-                        keyboardShouldPersistTaps="handled"
-                        keyboardDismissMode="interactive"
-                        showsVerticalScrollIndicator={false}
-                        contentContainerStyle={{
-                          paddingTop: 8,
-                          paddingBottom: editorToolbarHeight + 16,
-                        }}
-                      >
-                        <View style={styles.editorCard}>
-                          <TextInput
-                            ref={editorInput}
-                            accessibilityLabel="Texto da entrada"
-                            placeholder="Escreva para você…"
-                            placeholderTextColor={theme.muted}
-                            selectionColor={interfaceRed}
-                            multiline
-                            scrollEnabled={false}
-                            onContentSizeChange={({ nativeEvent }) =>
-                              setEditorTextHeight(
-                                Math.max(
-                                  148,
-                                  Math.ceil(nativeEvent.contentSize.height),
-                                ),
-                              )
-                            }
-                            onLayout={() =>
-                              editorScroll.current?.assureFocusedInputVisible()
-                            }
-                            editable={!saving && !picking}
-                            value={editing.text}
-                            onChangeText={(text) =>
-                              setEditing(
-                                (current) => current && { ...current, text },
-                              )
-                            }
-                            style={[
-                              styles.body,
-                              styles.editorInput,
-                              { height: editorTextHeight },
-                            ]}
-                          />
-                          {editing.photo && (
-                            <Image
-                              accessibilityLabel="Foto da entrada"
-                              source={{ uri: editing.photo }}
-                              style={styles.thumbnail}
-                            />
-                          )}
-                          <TextInput
-                            accessibilityLabel="Tags separadas por vírgula"
-                            placeholder="Tags, separadas por vírgula"
-                            placeholderTextColor={theme.muted}
-                            value={editing.tags}
-                            onChangeText={(tags) =>
-                              setEditing(
-                                (current) => current && { ...current, tags },
-                              )
-                            }
-                            editable={!saving && !picking}
-                            autoCapitalize="none"
-                            style={styles.editorTags}
-                          />
-                        </View>
-                      </KeyboardAwareScrollView>
-                      <View
-                        pointerEvents="box-none"
-                        onLayout={({ nativeEvent }) =>
-                          setEditorHeaderHeight(
-                            Math.ceil(nativeEvent.layout.height),
-                          )
-                        }
-                        style={styles.editorHeader}
-                      >
-                        <ProgressiveBlur
-                          singlePass
-                          edge="top"
-                          height={editorHeaderHeight + 14}
-                          color={theme.paper}
-                        />
-                        <GlassButton
-                          name="xmark"
-                          label="Cancelar edição"
-                          onPress={closeEditor}
-                          disabled={saving || picking}
-                        />
-                        <View style={styles.editorHeading}>
-                          <Text
-                            accessibilityRole="header"
-                            style={styles.editorTitle}
-                          >
-                            Editar entrada
-                          </Text>
-                          <Text style={styles.editorDate}>
-                            {new Date(
-                              editing.entry.createdAt,
-                            ).toLocaleDateString("pt-BR", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}{" "}
-                            · {timeLabel(editing.entry.createdAt)}
-                          </Text>
-                        </View>
-                        <GlassButton
-                          name="checkmark"
-                          label={
-                            saving ? "Salvando alterações" : "Salvar alterações"
-                          }
-                          onPress={saveEdit}
-                          disabled={editorSaveDisabled}
-                          prominent
-                        />
-                      </View>
-                      <KeyboardStickyView
-                        offset={{ opened: Math.max(insets.bottom, 12) - 12 }}
-                        onLayout={({ nativeEvent }) =>
-                          setEditorToolbarHeight(
-                            Math.ceil(nativeEvent.layout.height),
-                          )
-                        }
-                        pointerEvents="box-none"
-                        style={styles.editorToolbarOverlay}
-                      >
-                        <Animated.View layout={editorToolbarTransition}>
-                          <GlassSurface
-                            interactive
-                            materialize={0}
-                            style={styles.editorToolbarGlass}
-                          >
-                            <Touch
-                              label={
-                                editing.photo ? "Trocar foto" : "Escolher foto"
-                              }
-                              disabled={saving || picking}
-                              onPress={() => void attachPhoto(false, "editor")}
-                              style={styles.editorButton}
-                            >
-                              <Symbol
-                                name="photo.on.rectangle"
-                                size={20}
-                                color={theme.ink}
-                              />
-                            </Touch>
-                            <Touch
-                              label="Tirar foto"
-                              disabled={saving || picking}
-                              onPress={() => void attachPhoto(true, "editor")}
-                              style={styles.editorButton}
-                            >
-                              <Symbol
-                                name="camera"
-                                size={20}
-                                color={theme.ink}
-                              />
-                            </Touch>
-                            {editing.photo && (
-                              <Touch
-                                label="Remover foto"
-                                disabled={saving || picking}
-                                onPress={() =>
-                                  setEditing(
-                                    (current) =>
-                                      current && {
-                                        ...current,
-                                        photo: undefined,
-                                      },
-                                  )
-                                }
-                                style={styles.editorButton}
-                              >
-                                <Symbol
-                                  name="trash"
-                                  size={18}
-                                  color={interfaceRed}
-                                />
-                              </Touch>
-                            )}
-                          </GlassSurface>
-                        </Animated.View>
-                      </KeyboardStickyView>
-                    </View>
-                  </SafeAreaView>
-                </View>
-              </SafeAreaProvider>
-            </GestureHandlerRootView>
-          </Modal>
+          <DiaryEditor
+            editing={editing}
+            reducedMotion={reducedMotion}
+            editorInput={editorInput}
+            closeEditor={closeEditor}
+            editorScroll={editorScroll}
+            editorHeaderHeight={editorHeaderHeight}
+            editorToolbarHeight={editorToolbarHeight}
+            setEditorTextHeight={setEditorTextHeight}
+            saving={saving}
+            picking={picking}
+            setEditing={setEditing}
+            editorTextHeight={editorTextHeight}
+            setEditorHeaderHeight={setEditorHeaderHeight}
+            saveEdit={saveEdit}
+            editorSaveDisabled={editorSaveDisabled}
+            insets={insets}
+            setEditorToolbarHeight={setEditorToolbarHeight}
+            attachPhoto={attachPhoto}
+          />
         )}
         {original && (
           <Modal
@@ -2209,350 +1867,3 @@ export function DiaryScreen() {
     </GlassThemeProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.paper },
-  fill: { flex: 1 },
-  focusLayer: { ...StyleSheet.absoluteFill, backgroundColor: "transparent" },
-  focusWash: { ...StyleSheet.absoluteFill, backgroundColor: "#F7F2E8B0" },
-  focusHeader: {
-    position: "absolute",
-    left: 20,
-    right: 20,
-    paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  focusTitle: {
-    color: "#111111",
-    fontSize: 21,
-    fontWeight: "600",
-    letterSpacing: -0.4,
-  },
-  focusEyebrow: { color: interfaceRed },
-  focusMessages: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-  },
-  header: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-  },
-  heading: { flex: 1 },
-  wordmark: {
-    color: theme.muted,
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 1,
-  },
-  title: {
-    color: theme.ink,
-    fontSize: 32,
-    fontWeight: "600",
-    letterSpacing: -1,
-  },
-  pastTitle: { fontSize: 24 },
-  list: { paddingHorizontal: 20 },
-  empty: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  entryRow: {
-    position: "relative",
-    marginBottom: 12,
-    paddingRight: 8,
-    paddingLeft: 24,
-  },
-  entryMetadata: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 5,
-  },
-  entryTime: {
-    color: theme.muted,
-    fontSize: 12,
-    marginBottom: 4,
-    paddingRight: 4,
-    textAlign: "right",
-  },
-  swipeHint: { position: "absolute", right: 12, top: 24, padding: 6 },
-  entry: {
-    alignSelf: "flex-end",
-    maxWidth: "100%",
-    paddingLeft: 12,
-    paddingRight: 18,
-    paddingVertical: 8,
-    borderRadius: 17,
-    borderCurve: "continuous",
-    gap: 6,
-  },
-  hiddenBubble: { opacity: 0 },
-  mediaEntry: { width: "100%", maxWidth: 320 },
-  editorSurface: { flex: 1, backgroundColor: theme.paper },
-  editor: {
-    flex: 1,
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 12,
-  },
-  editorReadingArea: { flex: 1 },
-  editorHeader: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingBottom: 10,
-  },
-  editorHeading: { flex: 1, alignItems: "center", gap: 3 },
-  editorTitle: {
-    color: theme.ink,
-    fontSize: 19,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  editorDate: { color: theme.muted, fontSize: 13, textAlign: "center" },
-  editorButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 22,
-  },
-  editorCard: {
-    gap: 10,
-    padding: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#D9C6BD",
-    borderRadius: 18,
-    borderCurve: "continuous",
-    backgroundColor: "#FFFCF8",
-  },
-  editorTags: {
-    minHeight: 44,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#D9C6BD",
-    color: theme.ink,
-    fontSize: 14,
-    paddingHorizontal: 2,
-  },
-  editorInput: { minHeight: 148, textAlignVertical: "top", padding: 2 },
-  editorToolbarOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
-  editorToolbarGlass: {
-    flexDirection: "row",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 24,
-  },
-  originalLayer: {
-    flex: 1,
-    justifyContent: "flex-end",
-    paddingHorizontal: 16,
-    backgroundColor: "#211D1B33",
-  },
-  originalSheet: { maxHeight: "78%", borderRadius: 32, padding: 18, gap: 14 },
-  originalHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
-  originalClose: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  originalContent: { flexGrow: 0, flexShrink: 1 },
-  originalBody: { gap: 12 },
-  quotedEntry: { flexDirection: "row", alignItems: "center", gap: 8 },
-  quoteThumbnail: {
-    width: 42,
-    height: 42,
-    borderRadius: 9,
-    backgroundColor: theme.paper,
-  },
-  muted: { color: theme.muted, fontSize: 13 },
-  body: { color: theme.ink, fontSize: 17, lineHeight: 24 },
-  quote: {
-    backgroundColor: "#FFF5F1",
-    borderRadius: 10,
-    padding: 10,
-    gap: 4,
-  },
-  photo: {
-    width: "100%",
-    aspectRatio: 1.5,
-    borderRadius: 12,
-    backgroundColor: theme.paper,
-  },
-  entryTags: { color: "#79342D", fontSize: 13 },
-  reaction: {
-    alignSelf: "flex-end",
-    backgroundColor: "#FFF5F1",
-    paddingHorizontal: 6,
-    borderRadius: 12,
-    fontSize: 16,
-  },
-  selectableRow: { paddingLeft: 44 },
-  selectionIndicator: {
-    position: "absolute",
-    left: -40,
-    top: 5,
-    width: 32,
-    alignItems: "center",
-  },
-  selectionBar: { position: "absolute", left: 16, right: 16, bottom: 0 },
-  selectionSurface: {
-    borderRadius: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 10,
-  },
-  dock: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  hiddenDock: { opacity: 0 },
-  composer: { paddingHorizontal: 16 },
-  newIdeas: { alignSelf: "center", marginBottom: 4 },
-  newIdeasSurface: { borderRadius: 22 },
-  newIdeasButton: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-  },
-  composerSurface: { borderRadius: 28, alignSelf: "center" },
-  composerClip: { flex: 1, borderRadius: 28, overflow: "hidden" },
-  composerContents: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    padding: 8,
-    gap: 6,
-  },
-  compactComposer: {
-    position: "absolute",
-    inset: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    paddingHorizontal: 16,
-  },
-  panelGrabber: {
-    alignSelf: "center",
-    width: 80,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  trayLabel: { color: theme.ink, fontSize: 14, fontWeight: "600" },
-  attachmentPanel: {
-    flex: 1,
-    marginTop: 8,
-    borderRadius: 28,
-    borderCurve: "continuous",
-  },
-  attachmentGlass: { flex: 1, borderRadius: 28 },
-  plus: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  panelHandle: {
-    alignSelf: "center",
-    width: 30,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#A8A99F",
-  },
-  attachmentScroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingBottom: 12,
-  },
-  attachmentActions: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
-    alignItems: "center",
-  },
-  attachmentAction: {
-    width: 86,
-    minHeight: 72,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  input: {
-    paddingHorizontal: 5,
-    paddingVertical: 9,
-    color: theme.ink,
-    fontSize: 17,
-    lineHeight: 22,
-  },
-  inputMeasure: { position: "absolute", top: 0, left: 0, right: 0, opacity: 0 },
-  replyBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 5,
-    paddingLeft: 12,
-    gap: 8,
-    backgroundColor: "#F4D7D1",
-    borderRadius: 20,
-    borderCurve: "continuous",
-  },
-  replyCopy: { flex: 1, gap: 2 },
-  replyLabel: { color: "#79342D", fontSize: 12, fontWeight: "600" },
-  replyExcerpt: { color: theme.ink, fontSize: 14 },
-  dismiss: {
-    width: 44,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  attachment: { alignSelf: "flex-start", marginLeft: 4 },
-  thumbnail: { width: 88, height: 88, borderRadius: 12 },
-  photoDismiss: { position: "absolute", top: 0, right: 0 },
-  pressedControl: { opacity: 0.65, transform: [{ scale: 0.94 }] },
-  photoDismissIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#252720D9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-  control: { minHeight: 44, justifyContent: "center", paddingHorizontal: 6 },
-  action: { color: theme.ink, fontSize: 14, fontWeight: "600" },
-  disabled: { backgroundColor: theme.muted },
-});
