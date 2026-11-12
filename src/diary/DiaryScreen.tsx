@@ -81,6 +81,8 @@ import { DiaryEditor } from "./DiaryEditor";
 import { DiaryComposer } from "./DiaryComposer";
 import { DiaryCalendar } from "./DiaryCalendar";
 import { DiarySearch } from "./DiarySearch";
+import { DiaryPages } from "./DiaryPages";
+import type { MenuProtectedBand } from "./menuLayout";
 import {
   parseDiaryTags,
   quotedEntryText,
@@ -95,6 +97,7 @@ import {
   readDay,
   readDayIndex,
   readEntry,
+  readQuickReactions,
   readThreadLinks,
   rememberDay,
   saveEntry,
@@ -102,6 +105,7 @@ import {
   keepDraftPhoto,
   newEntryId,
   toggleEntryFavorite,
+  writeQuickReactions,
 } from "./storage";
 
 const textRecognition =
@@ -200,7 +204,10 @@ function EntryCard({
   onReact: (emoji: string) => void;
   menuActive: boolean;
   onOpenMenu: (
-    menu: Omit<ComponentProps<typeof EntryActions>, "onClose">,
+    menu: Omit<
+      ComponentProps<typeof EntryActions>,
+      "onClose" | "quickReactions" | "onSaveQuickReactions"
+    >,
   ) => void;
 }) {
   const photo = entryPhotoUri(entry);
@@ -536,9 +543,13 @@ export function DiaryScreen() {
   );
   const [threadLinks, setThreadLinks] = useState<Map<string, string>>();
   const [selection, setSelection] = useState<Set<string>>();
+  const [quickReactions, setQuickReactions] = useState(readQuickReactions);
   const [entryMenu, setEntryMenu] = useState<{
     id: string;
-    props: Omit<ComponentProps<typeof EntryActions>, "onClose">;
+    props: Omit<
+      ComponentProps<typeof EntryActions>,
+      "onClose" | "quickReactions" | "onSaveQuickReactions"
+    >;
   }>();
   const closeEntryMenu = useCallback(() => setEntryMenu(undefined), []);
   const showComposer = !selection && (writingToday || !!focusSeed);
@@ -547,6 +558,7 @@ export function DiaryScreen() {
   const [picking, setPicking] = useState(false);
   const [calendar, setCalendar] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [pagesOpen, setPagesOpen] = useState(false);
   const [arriving, setArriving] = useState<string>();
   const [newIdeas, setNewIdeas] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(88);
@@ -792,10 +804,9 @@ export function DiaryScreen() {
     [entries],
   );
   const dates = useMemo(
-    () => [...new Set([...index.keys(), today])].sort().reverse(),
+    () => [...new Set([...index.keys(), today])].sort(),
     [index, today],
   );
-  const pageIndex = dates.indexOf(activeDay);
   const focused = !!focusSeed;
   const focusArrival = useMemo(
     () => FadeInDown.duration(260).reduceMotion(ReduceMotion.System),
@@ -1313,7 +1324,11 @@ export function DiaryScreen() {
 
   const emptyToday =
     writingToday && entries.length === 0 && status === "ready" && !focused;
-  const renderEntry = (entry: Entry, allowSwipe = true) => (
+  const renderEntry = (
+    entry: Entry,
+    allowSwipe = true,
+    protectedBand?: MenuProtectedBand,
+  ) => (
     <EntryCard
       key={entry.id}
       entry={entry}
@@ -1321,7 +1336,9 @@ export function DiaryScreen() {
       previous={quotedSource(entry.continuationOf)}
       selected={selection?.has(entry.id)}
       menuActive={entryMenu?.id === entry.id}
-      onOpenMenu={(props) => setEntryMenu({ id: entry.id, props })}
+      onOpenMenu={(props) =>
+        setEntryMenu({ id: entry.id, props: { ...props, protectedBand } })
+      }
       onToggle={() =>
         setSelection((current) => {
           if (!current) return current;
@@ -1473,18 +1490,16 @@ export function DiaryScreen() {
               </Text>
             )}
           </View>
-          {!selection && dates[pageIndex + 1] && (
+          {!selection && (
             <GlassButton
-              name="chevron.left"
-              label="Dia anterior disponível"
-              onPress={() => openDay(dates[pageIndex + 1])}
-            />
-          )}
-          {!selection && pageIndex > 0 && (
-            <GlassButton
-              name="chevron.right"
-              label="Próximo dia disponível"
-              onPress={() => openDay(dates[pageIndex - 1])}
+              name="rectangle.on.rectangle"
+              label="Abrir páginas do diário"
+              onPress={() => {
+                if (busy.current) return;
+                showAttachments(false);
+                Keyboard.dismiss();
+                setPagesOpen(true);
+              }}
             />
           )}
           {!selection && (
@@ -1707,10 +1722,8 @@ export function DiaryScreen() {
                     </Pressable>
                   </GestureDetector>
                 </Animated.View>
-                <Animated.ScrollView
-                  style={[styles.fill, attachmentContents]}
-                  contentContainerStyle={styles.attachmentScroll}
-                  showsVerticalScrollIndicator={false}
+                <Animated.View
+                  style={[styles.attachmentBody, attachmentContents]}
                 >
                   <View
                     style={styles.attachmentActions}
@@ -1756,7 +1769,7 @@ export function DiaryScreen() {
                       </Touch>
                     )}
                   </View>
-                </Animated.ScrollView>
+                </Animated.View>
               </View>
             </Animated.View>
           </KeyboardStickyView>
@@ -1767,7 +1780,9 @@ export function DiaryScreen() {
             initialDay={activeDay}
             today={today}
             progress={calendarProgress}
-            renderEntry={renderEntry}
+            renderEntry={(entry, protectedBand) =>
+              renderEntry(entry, true, protectedBand)
+            }
             onClose={closeCalendar}
             onOpenDay={(day) => {
               openDay(day);
@@ -1777,6 +1792,20 @@ export function DiaryScreen() {
         )}
         {searchOpen && (
           <DiarySearch index={index} onClose={() => setSearchOpen(false)} />
+        )}
+        {pagesOpen && (
+          <DiaryPages
+            days={dates}
+            index={index}
+            activeDay={activeDay}
+            today={today}
+            reducedMotion={reducedMotion}
+            onClose={() => setPagesOpen(false)}
+            onOpenDay={(day) => {
+              openDay(day);
+              setPagesOpen(false);
+            }}
+          />
         )}
         {editing && (
           <DiaryEditor
@@ -1857,6 +1886,16 @@ export function DiaryScreen() {
         {entryMenu && (
           <EntryActions
             {...entryMenu.props}
+            quickReactions={quickReactions}
+            onSaveQuickReactions={(reactions) => {
+              try {
+                writeQuickReactions(reactions);
+                setQuickReactions(reactions);
+                return true;
+              } catch {
+                return false;
+              }
+            }}
             protectedTop={
               insets.top + (focused ? focusHeaderHeight : headerHeight)
             }

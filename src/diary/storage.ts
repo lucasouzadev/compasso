@@ -1,5 +1,6 @@
 import { protectQuoteSnapshots, quotePhotoName } from "./citations";
 import { createDraftJournal, type DiaryDraft } from "./drafts";
+import { defaultReactions, parseQuickReactions } from "./reactions";
 import { Directory, File, Paths } from "expo-file-system";
 import {
   deleteAsync,
@@ -15,6 +16,55 @@ import {
 
 const root = () => new Directory(Paths.document, "compasso-entries");
 const draftRoot = () => new Directory(Paths.document, "compasso-drafts");
+const reactionRoot = () => new Directory(Paths.document, "compasso-reactions");
+
+function reactionRevisions(directory: Directory) {
+  return directory.exists
+    ? directory
+        .list()
+        .flatMap((file) => {
+          const match = /^reactions-(\d+)\.json$/.exec(file.name);
+          return match && file instanceof File
+            ? [{ file, revision: Number(match[1]) }]
+            : [];
+        })
+        .sort((a, b) => b.revision - a.revision)
+    : [];
+}
+
+export function readQuickReactions() {
+  try {
+    for (const { file } of reactionRevisions(reactionRoot())) {
+      try {
+        const reactions = parseQuickReactions(JSON.parse(file.textSync()));
+        if (reactions) return reactions;
+      } catch {
+        // Keep looking for the previous readable preference.
+      }
+    }
+  } catch {
+    // The standard reactions are available before local storage is readable.
+  }
+  return defaultReactions;
+}
+
+export function writeQuickReactions(reactions: string[]) {
+  if (!parseQuickReactions(reactions))
+    throw new Error("Invalid quick reactions");
+  const directory = reactionRoot();
+  directory.create({ idempotent: true });
+  const revisions = reactionRevisions(directory);
+  const pending = new File(directory, "pending.json");
+  pending.writeSync(JSON.stringify(reactions));
+  pending.rename(`reactions-${(revisions[0]?.revision ?? 0) + 1}.json`);
+  for (const { file } of revisions.slice(1)) {
+    try {
+      file.delete();
+    } catch {
+      // The new preference was already committed.
+    }
+  }
+}
 const journal = createDraftJournal({
   keys: () =>
     draftRoot().exists

@@ -286,19 +286,20 @@ export const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "#A8A99F",
   },
-  attachmentScroll: {
-    flexGrow: 1,
+  attachmentBody: {
+    flex: 1,
     justifyContent: "center",
     paddingBottom: 12,
   },
   attachmentActions: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 12,
+    paddingHorizontal: 8,
     alignItems: "center",
   },
   attachmentAction: {
-    width: 86,
+    flex: 1,
+    maxWidth: 98,
     minHeight: 72,
     borderRadius: 18,
     alignItems: "center",

@@ -1,4 +1,4 @@
-import { entryMenuLayout } from "./menuLayout";
+import { entryMenuLayout, type MenuProtectedBand } from "./menuLayout";
 import {
   BottomSheet,
   Button,
@@ -27,7 +27,6 @@ import {
   presentationDetents,
   presentationDragIndicator,
   scrollEdgeEffectStyle,
-  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import {
   useCallback,
@@ -60,9 +59,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { selectionAsync } from "expo-haptics";
 import { scheduleOnRN } from "react-native-worklets";
+import { replaceQuickReaction } from "./reactions";
 
-const quick = ["👍", "❤️", "😂", "😮", "🙏"];
-const railEmojis = [...quick, "😢", "🔥", "👏", "✨", "🎉"];
 const catalog = [
   [
     "Rostos e pessoas",
@@ -108,17 +106,19 @@ function EmojiButton({
   emoji,
   selected,
   width = 40,
+  label = emoji,
   onPress,
 }: {
   emoji: string;
   selected?: boolean;
   width?: number;
+  label?: string;
   onPress: () => void;
 }) {
   return (
     <Button
       onPress={onPress}
-      modifiers={[buttonStyle("plain"), accessibilityLabel(emoji)]}
+      modifiers={[buttonStyle("plain"), accessibilityLabel(label)]}
     >
       <Text
         modifiers={[
@@ -147,7 +147,7 @@ export type ContextPointer = {
   phase: "idle" | "moving" | "released";
 };
 
-const cell = 40;
+const cell = 44;
 const row = 44;
 const reactionHeight = 50;
 
@@ -168,19 +168,25 @@ export type DiaryMenuAction = {
 export function EntryActions({
   bounds,
   protectedTop = 0,
+  protectedBand,
   pointer,
   onClose,
   children,
   reaction,
+  quickReactions,
+  onSaveQuickReactions,
   onReact,
   actions,
 }: {
   bounds: BubbleBounds;
   protectedTop?: number;
+  protectedBand?: MenuProtectedBand;
   pointer: SharedValue<ContextPointer>;
   onClose: () => void;
   children: ReactNode;
   reaction?: string;
+  quickReactions: string[];
+  onSaveQuickReactions: (reactions: string[]) => boolean;
   onReact: (emoji: string) => void;
   actions: DiaryMenuAction[];
 }) {
@@ -209,23 +215,23 @@ export function EntryActions({
       sourceTop: source.y,
       sourceHeight: source.height,
       actionCount,
+      protectedBand,
     });
   const menuOffset = useSharedValue(0);
   const menuScroll = useAnimatedScrollHandler(({ contentOffset }) => {
     menuOffset.set(contentOffset.y);
   });
   const right = Math.min(width - 10, source.x + source.width);
-  const railWidth = Math.min(width - 24, 258);
+  const railPadding = 7;
+  const plusIndex = quickReactions.length;
+  const railWidth = Math.min(
+    width - 24,
+    cell * (plusIndex + 1) + 2 * railPadding,
+  );
+  const cellWidth = (railWidth - 2 * railPadding) / (plusIndex + 1);
   const menuWidth = Math.min(width - 24, 258);
   const railLeft = Math.max(12, right - railWidth);
   const menuLeft = Math.max(12, right - menuWidth);
-  const railPadding = 7;
-  const emojiViewport = railWidth - cell - 2 * railPadding;
-  const railOffset = useSharedValue(0);
-  const railScroll = useAnimatedScrollHandler(({ contentOffset }) => {
-    railOffset.set(contentOffset.x);
-  });
-  const plusIndex = railEmojis.length;
   const firstAction = 4;
   const target = useDerivedValue(() => {
     const point = pointer.get();
@@ -234,15 +240,11 @@ export function EntryActions({
     const ry = point.y - railTop;
     if (
       rx >= 0 &&
-      rx < emojiViewport + cell &&
+      rx < cellWidth * (plusIndex + 1) &&
       ry >= 0 &&
       ry < reactionHeight
     ) {
-      if (rx >= emojiViewport) return plusIndex;
-      return Math.min(
-        plusIndex - 1,
-        Math.floor((rx + railOffset.get()) / cell),
-      );
+      return Math.floor(rx / cellWidth);
     }
     const mx = point.x - menuLeft;
     const my = point.y - menuTop - firstAction + menuOffset.get();
@@ -262,7 +264,7 @@ export function EntryActions({
     const index = target.get();
     return {
       opacity: index >= 0 && index < plusIndex ? 1 : 0,
-      transform: [{ translateX: Math.max(0, index) * cell }],
+      transform: [{ translateX: Math.max(0, index) * cellWidth }],
     };
   });
   const plusHighlight = useAnimatedStyle(() => ({
@@ -288,7 +290,10 @@ export function EntryActions({
     ],
   }));
   const previewStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: (source.y - top) * (1 - phase.get()) }],
+    opacity: protectedBand ? phase.get() : 1,
+    transform: [
+      { translateY: protectedBand ? 0 : (source.y - top) * (1 - phase.get()) },
+    ],
   }));
 
   const finish = useCallback(() => {
@@ -324,7 +329,7 @@ export function EntryActions({
   }
 
   function commit(index: number) {
-    if (index < plusIndex) reactTo(railEmojis[index]);
+    if (index < plusIndex) reactTo(quickReactions[index]);
     else if (index === plusIndex) {
       pointer.set({ x: 0, y: 0, phase: "idle" });
       setSheetOpen(true);
@@ -387,45 +392,45 @@ export function EntryActions({
               railStyle,
             ]}
           >
-            <Animated.ScrollView
-              horizontal
-              bounces={false}
-              showsHorizontalScrollIndicator={false}
-              style={{ width: emojiViewport, flexGrow: 0 }}
-              onScroll={railScroll}
-              scrollEventThrottle={16}
-            >
-              <View style={styles.emojiStrip}>
-                <Animated.View
-                  pointerEvents="none"
-                  style={[styles.railHighlight, railHighlight]}
-                />
-                {railEmojis.map((emoji) => (
-                  <Pressable
-                    key={emoji}
-                    accessibilityRole="button"
-                    accessibilityLabel={emoji}
-                    accessibilityState={{ selected: emoji === reaction }}
-                    onPress={() => reactTo(emoji)}
-                    style={[
-                      styles.railCell,
-                      emoji === reaction && styles.currentEmoji,
-                    ]}
-                  >
-                    <NativeText style={styles.railEmoji}>{emoji}</NativeText>
-                  </Pressable>
-                ))}
-              </View>
-            </Animated.ScrollView>
+            <View style={styles.emojiStrip}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.railHighlight,
+                  { width: cellWidth },
+                  railHighlight,
+                ]}
+              />
+              {quickReactions.map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  accessibilityRole="button"
+                  accessibilityLabel={emoji}
+                  accessibilityState={{ selected: emoji === reaction }}
+                  onPress={() => reactTo(emoji)}
+                  style={[
+                    styles.railCell,
+                    { width: cellWidth },
+                    emoji === reaction && styles.currentEmoji,
+                  ]}
+                >
+                  <NativeText style={styles.railEmoji}>{emoji}</NativeText>
+                </Pressable>
+              ))}
+            </View>
             <Pressable
-              style={styles.railCell}
+              style={[styles.railCell, { width: cellWidth }]}
               accessibilityRole="button"
               accessibilityLabel="Mais emojis"
               onPress={() => setSheetOpen(true)}
             >
               <Animated.View
                 pointerEvents="none"
-                style={[styles.railHighlight, plusHighlight]}
+                style={[
+                  styles.railHighlight,
+                  { width: cellWidth },
+                  plusHighlight,
+                ]}
               />
               <Symbol name="plus" size={20} color="#211D1B" />
             </Pressable>
@@ -504,6 +509,8 @@ export function EntryActions({
         <EmojiSheet
           visible={sheetOpen}
           reaction={reaction}
+          quickReactions={quickReactions}
+          onSaveQuickReactions={onSaveQuickReactions}
           onClose={() => setSheetOpen(false)}
           onReact={(emoji) => {
             pickedEmoji.current = emoji;
@@ -555,12 +562,16 @@ function MenuAction({ title, icon, destructive, onPress }: DiaryMenuAction) {
 function EmojiSheet({
   visible,
   reaction,
+  quickReactions,
+  onSaveQuickReactions,
   onClose,
   onReact,
   onDismiss,
 }: {
   visible: boolean;
   reaction?: string;
+  quickReactions: string[];
+  onSaveQuickReactions: (reactions: string[]) => boolean;
   onClose: () => void;
   onReact: (emoji: string) => void;
   onDismiss: () => void;
@@ -569,7 +580,21 @@ function EmojiSheet({
   const columns = 7;
   const emojiWidth = Math.max(32, Math.min(52, (width - 52) / columns));
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("Tudo");
+  const [draft, setDraft] = useState<string[]>();
+  const [slot, setSlot] = useState(0);
+  const [saveError, setSaveError] = useState(false);
+  function leaveCustomization() {
+    setDraft(undefined);
+    setSaveError(false);
+  }
+  function chooseEmoji(emoji: string) {
+    if (!draft) {
+      onReact(emoji);
+      return;
+    }
+    setDraft(replaceQuickReaction(draft, slot, emoji));
+    setSaveError(false);
+  }
   const term = normalize(query);
   const groups = term
     ? [
@@ -584,13 +609,15 @@ function EmojiSheet({
         },
       ]
     : [
-        { title: "Reações padrão", emojis: quick },
+        ...(!draft
+          ? [{ title: "Reações rápidas", emojis: quickReactions }]
+          : []),
         ...(recent.length ? [{ title: "Recentes", emojis: recent }] : []),
         ...catalog.map(({ title, emojis }) => ({
           title,
           emojis: emojis.map(({ emoji }) => emoji),
         })),
-      ].filter(({ title }) => category === "Tudo" || category === title);
+      ];
   return (
     <View style={styles.anchor} pointerEvents="none">
       <Host style={styles.fill} colorScheme="light">
@@ -598,7 +625,7 @@ function EmojiSheet({
           isPresented={visible}
           onDismiss={() => {
             setQuery("");
-            setCategory("Tudo");
+            leaveCustomization();
             onDismiss();
           }}
           onIsPresentedChange={(open) => {
@@ -607,7 +634,7 @@ function EmojiSheet({
         >
           <Group
             modifiers={[
-              presentationDetents(["medium", "large"]),
+              presentationDetents(draft ? ["large"] : ["medium", "large"]),
               presentationDragIndicator("visible"),
             ]}
           >
@@ -616,6 +643,57 @@ function EmojiSheet({
               spacing={10}
               modifiers={[padding({ top: 20, leading: 16, trailing: 16 })]}
             >
+              {draft ? (
+                <VStack alignment="leading" spacing={8}>
+                  <HStack>
+                    <Button
+                      label="Cancelar"
+                      onPress={leaveCustomization}
+                      modifiers={[buttonStyle("borderless")]}
+                    />
+                    <Spacer />
+                    <Text modifiers={[font({ size: 16, weight: "semibold" })]}>
+                      Reações rápidas
+                    </Text>
+                    <Spacer />
+                    <Button
+                      label="Guardar"
+                      onPress={() => {
+                        if (onSaveQuickReactions(draft)) leaveCustomization();
+                        else setSaveError(true);
+                      }}
+                      modifiers={[buttonStyle("borderless")]}
+                    />
+                  </HStack>
+                  <HStack spacing={3}>
+                    {draft.map((emoji, index) => (
+                      <EmojiButton
+                        key={index}
+                        emoji={emoji}
+                        width={emojiWidth}
+                        label={`Posição ${index + 1}: ${emoji}${slot === index ? ", selecionada" : ""}`}
+                        selected={slot === index}
+                        onPress={() => setSlot(index)}
+                      />
+                    ))}
+                  </HStack>
+                  <Text modifiers={[font({ size: 13 })]}>
+                    {saveError
+                      ? "Não foi possível guardar. Tente novamente."
+                      : "Escolha um emoji para substituir a posição selecionada."}
+                  </Text>
+                </VStack>
+              ) : (
+                <Button
+                  label="Personalizar reações rápidas"
+                  systemImage="slider.horizontal.3"
+                  onPress={() => {
+                    setSlot(0);
+                    setDraft(quickReactions);
+                  }}
+                  modifiers={[buttonStyle("borderless")]}
+                />
+              )}
               <HStack
                 spacing={9}
                 modifiers={[
@@ -633,31 +711,6 @@ function EmojiSheet({
                   ]}
                 />
               </HStack>
-              {!term && (
-                <ScrollView
-                  axes="horizontal"
-                  showsIndicators={false}
-                  modifiers={[frame({ height: 34 })]}
-                >
-                  <HStack spacing={12}>
-                    {[
-                      "Tudo",
-                      ...(recent.length ? ["Recentes"] : []),
-                      ...catalog.map(({ title }) => title),
-                    ].map((title) => (
-                      <Button
-                        key={title}
-                        label={title}
-                        onPress={() => setCategory(title)}
-                        modifiers={[
-                          buttonStyle("borderless"),
-                          tint(category === title ? "#B82018" : "#49413E"),
-                        ]}
-                      />
-                    ))}
-                  </HStack>
-                </ScrollView>
-              )}
               <ScrollView
                 showsIndicators={false}
                 modifiers={[
@@ -694,8 +747,10 @@ function EmojiSheet({
                                   key={emoji}
                                   emoji={emoji}
                                   width={emojiWidth}
-                                  selected={reaction === emoji}
-                                  onPress={() => onReact(emoji)}
+                                  selected={
+                                    (draft ? draft[slot] : reaction) === emoji
+                                  }
+                                  onPress={() => chooseEmoji(emoji)}
                                 />
                               ))}
                           </HStack>

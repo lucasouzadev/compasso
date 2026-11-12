@@ -34,3 +34,27 @@ test("short screens limit the visible menu and retain all action rows", () => {
   assert.ok(layout.actionsHeight < layout.contentHeight);
   assert.equal(layout.contentHeight, 272);
 });
+
+test("calendar detail actions avoid the date on both small and tall sheets", () => {
+  for (const scenario of [
+    { top: 620, bottom: 680, sourceHeight: 40, above: true },
+    { top: 250, bottom: 310, sourceHeight: 190, above: false },
+  ]) {
+    const layout = entryMenuLayout({
+      screenHeight: 844,
+      safeTop: 150,
+      safeBottom: 34,
+      sourceTop: scenario.bottom + 16,
+      sourceHeight: scenario.sourceHeight,
+      actionCount: 6,
+      protectedBand: scenario,
+    });
+    if (scenario.above) {
+      assert.ok(layout.menuTop + layout.actionsHeight < scenario.top);
+    } else {
+      assert.ok(layout.railTop > scenario.bottom);
+    }
+    assert.ok(layout.previewHeight > 0);
+    assert.ok(layout.menuTop + layout.actionsHeight <= 844 - 34 - 8);
+  }
+});

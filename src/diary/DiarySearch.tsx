@@ -197,6 +197,9 @@ export function DiarySearch({
               style={styles.sheet}
             >
               <View style={styles.header}>
+                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                  <GlassSurface style={styles.headerGlass} materialize={0} />
+                </View>
                 <GlassButton
                   name={selected ? "chevron.left" : "xmark"}
                   label={
@@ -497,53 +500,57 @@ export function DiarySearch({
                         </Animated.View>
                       )}
                     />
-                    <ProgressiveBlur
-                      singlePass
-                      edge="top"
-                      height={18}
-                      color={theme.paper}
-                    />
                   </View>
                 </View>
                 {selected && (
-                  <ScrollView
-                    key={selected.id}
-                    contentOffset={{
-                      x: 0,
-                      y: readingOffset,
-                    }}
-                    scrollEventThrottle={16}
-                    onScroll={({ nativeEvent }) =>
-                      readingOffsets.current.set(
-                        selected.id,
-                        nativeEvent.contentOffset.y,
-                      )
-                    }
-                    contentContainerStyle={{ paddingBottom: 24 }}
+                  <View
                     style={[
                       StyleSheet.absoluteFill,
                       { backgroundColor: theme.paper },
                     ]}
                   >
-                    <Text style={[styles.day, { color: theme.muted }]}>
-                      {dateLabel(entryDay(selected))} · {entryTime(selected)}
-                    </Text>
-                    <View
-                      style={[styles.entry, { backgroundColor: "#F8DFDB" }]}
+                    <ScrollView
+                      key={selected.id}
+                      contentOffset={{
+                        x: 0,
+                        y: readingOffset,
+                      }}
+                      scrollEventThrottle={16}
+                      onScroll={({ nativeEvent }) =>
+                        readingOffsets.current.set(
+                          selected.id,
+                          nativeEvent.contentOffset.y,
+                        )
+                      }
+                      contentContainerStyle={{ paddingBottom: 24 }}
+                      style={styles.fill}
                     >
-                      <DiaryEntryBody
-                        entry={selected}
-                        previous={previous}
-                        selectable
-                        showFavorite
-                        onOpenOriginal={(source) => {
-                          setReadingOffset(0);
-                          setHistory((current) => [...current, selected]);
-                          setSelected(source);
-                        }}
-                      />
-                    </View>
-                  </ScrollView>
+                      <Text style={[styles.day, { color: theme.muted }]}>
+                        {dateLabel(entryDay(selected))} · {entryTime(selected)}
+                      </Text>
+                      <View
+                        style={[styles.entry, { backgroundColor: "#F8DFDB" }]}
+                      >
+                        <DiaryEntryBody
+                          entry={selected}
+                          previous={previous}
+                          selectable
+                          showFavorite
+                          onOpenOriginal={(source) => {
+                            setReadingOffset(0);
+                            setHistory((current) => [...current, selected]);
+                            setSelected(source);
+                          }}
+                        />
+                      </View>
+                    </ScrollView>
+                    <ProgressiveBlur
+                      singlePass
+                      edge="top"
+                      height={12}
+                      color={theme.paper}
+                    />
+                  </View>
                 )}
               </View>
             </SafeAreaView>
@@ -568,7 +575,13 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 12,
   },
-  header: { flexDirection: "row", alignItems: "center", gap: 12 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 4,
+  },
+  headerGlass: { flex: 1, borderRadius: 0 },
   headerSpacer: { width: 44 },
   title: { flex: 1, fontSize: 19, fontWeight: "600", textAlign: "center" },
   tabs: {

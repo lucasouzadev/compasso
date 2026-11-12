@@ -28,7 +28,6 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { scheduleOnRN } from "react-native-worklets";
 import { dayKey, monthCells, parseDay } from "../cookbooks/zest/data/diary";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
-import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import {
   GlassSurface,
@@ -37,6 +36,7 @@ import {
 import { theme } from "../cookbooks/zest/theme";
 import { collectDiaryTags, matchesDiaryTag, type Entry } from "./entries";
 import { DiaryTagFilter, DiaryTagMenu } from "./DiaryTagFilter";
+import type { MenuProtectedBand } from "./menuLayout";
 import {
   entryPhotoUri,
   findDayPhoto,
@@ -65,7 +65,7 @@ export function DiaryCalendar({
   initialDay: string;
   today: string;
   progress: SharedValue<number>;
-  renderEntry: (entry: Entry) => ReactNode;
+  renderEntry: (entry: Entry, protectedBand?: MenuProtectedBand) => ReactNode;
   onClose: () => void;
   onOpenDay: (day: string) => void;
 }) {
@@ -291,6 +291,9 @@ export function DiaryCalendar({
               </Pressable>
             </GestureDetector>
             <View style={[styles.monthRow, styles.monthHeader]}>
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <GlassSurface materialize={0} style={styles.headerGlass} />
+              </View>
               <Text accessibilityRole="header" style={styles.monthTitle}>
                 {month.toLocaleDateString("pt-BR", {
                   month: "long",
@@ -520,12 +523,6 @@ export function DiaryCalendar({
                   </Animated.View>
                 </ScrollView>
               </GestureDetector>
-              <ProgressiveBlur
-                edge="top"
-                height={18}
-                color={theme.paper}
-                singlePass
-              />
             </View>
           </View>
         </View>
@@ -540,44 +537,90 @@ export function DiaryCalendar({
             onPress={closeDetail}
             style={StyleSheet.absoluteFill}
           />
-          <Animated.View
-            entering={revealDetail}
-            style={[
-              styles.position,
-              {
-                bottom: insets.bottom + 12,
-                height: Math.min(panelHeight, detail.photo ? 420 : 300),
-              },
-            ]}
-          >
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <GlassSurface materialize={0} style={styles.panel} />
-            </View>
-            <View style={styles.viewport}>
-              <ScrollView
-                style={styles.grow}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.detailContent}
-              >
-                <View style={styles.monthRow}>
-                  <Touch
-                    label="Voltar ao calendário"
-                    onPress={closeDetail}
-                    style={styles.monthButton}
-                  >
-                    <Symbol name="chevron.left" size={17} color={theme.ink} />
-                  </Touch>
-                  <Text accessibilityRole="header" style={styles.month}>
-                    {fullDate(selected)}
-                  </Text>
-                </View>
-                {renderEntry(detail)}
-              </ScrollView>
-            </View>
-          </Animated.View>
+          <CalendarEntryDetail
+            key={detail.id}
+            entry={detail}
+            day={selected}
+            bottom={insets.bottom + 12}
+            maxHeight={panelHeight}
+            renderEntry={renderEntry}
+            onClose={closeDetail}
+          />
         </View>
       )}
     </View>
+  );
+}
+
+function CalendarEntryDetail({
+  entry,
+  day,
+  bottom,
+  maxHeight,
+  renderEntry,
+  onClose,
+}: {
+  entry: Entry;
+  day: string;
+  bottom: number;
+  maxHeight: number;
+  renderEntry: (entry: Entry, protectedBand?: MenuProtectedBand) => ReactNode;
+  onClose: () => void;
+}) {
+  const [panelTop, setPanelTop] = useState<number>();
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const measuredHeight =
+    headerHeight && contentHeight
+      ? Math.min(maxHeight, headerHeight + contentHeight)
+      : undefined;
+  const protectedBand =
+    panelTop === undefined || !headerHeight
+      ? undefined
+      : { top: panelTop, bottom: panelTop + headerHeight };
+
+  return (
+    <Animated.View
+      entering={revealDetail}
+      onLayout={({ nativeEvent }) => setPanelTop(nativeEvent.layout.y)}
+      style={[
+        styles.position,
+        styles.detailPanel,
+        { bottom, maxHeight, height: measuredHeight },
+      ]}
+    >
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <GlassSurface materialize={0} style={styles.panel} />
+      </View>
+      <View
+        style={styles.detailHeader}
+        onLayout={({ nativeEvent }) =>
+          setHeaderHeight(nativeEvent.layout.height)
+        }
+      >
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <GlassSurface materialize={0} style={styles.headerGlass} />
+        </View>
+        <GlassButton
+          name="chevron.left"
+          label="Voltar ao calendário"
+          prominent
+          onPress={onClose}
+        />
+        <Text accessibilityRole="header" style={styles.month}>
+          {fullDate(day)}
+        </Text>
+      </View>
+      <ScrollView
+        style={styles.detailScroll}
+        alwaysBounceVertical={false}
+        onContentSizeChange={(_, height) => setContentHeight(height)}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.detailContent}
+      >
+        {renderEntry(entry, protectedBand)}
+      </ScrollView>
+    </Animated.View>
   );
 }
 
@@ -609,8 +652,14 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
     overflow: "hidden",
   },
-  monthTitle: { flex: 1, fontSize: 20, fontWeight: "600", color: theme.ink },
-  monthHeader: { marginBottom: 0, marginHorizontal: 16, gap: 6 },
+  monthTitle: { flex: 1, fontSize: 17, fontWeight: "600", color: theme.ink },
+  monthHeader: {
+    marginBottom: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    gap: 6,
+  },
+  headerGlass: { flex: 1, borderRadius: 0 },
   monthControls: { flexDirection: "row", borderRadius: 22 },
   monthButton: {
     width: 44,
@@ -618,14 +667,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  detailContent: { padding: 16, paddingBottom: 24 },
+  detailPanel: {
+    borderRadius: 36,
+    borderCurve: "continuous",
+    overflow: "hidden",
+  },
+  detailHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  detailScroll: { flexGrow: 0, flexShrink: 1 },
+  detailContent: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 16 },
   monthRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     marginBottom: 6,
   },
-  month: { flex: 1, fontSize: 22, fontWeight: "600", color: theme.ink },
+  month: { flex: 1, fontSize: 16, fontWeight: "600", color: theme.ink },
   row: { flexDirection: "row" },
   weekday: {
     flex: 1,
