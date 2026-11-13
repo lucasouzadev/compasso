@@ -13,10 +13,8 @@ import {
   AppState,
   BackHandler,
   Keyboard,
-  Modal,
   Platform,
   Pressable,
-  ScrollView,
   Share,
   FlatList,
   StyleSheet,
@@ -69,7 +67,8 @@ import {
 import { dayKey, parseDay } from "../cookbooks/zest/data/diary";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import { ZestChatScroll } from "../cookbooks/zest/components/ChatScroll";
-import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
+import { DiaryScrollEdge } from "./DiaryScrollEdge";
+import { DiaryOriginal } from "./DiaryOriginal";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
 import { DiaryEntryBody } from "./DiaryEntryBody";
 import {
@@ -644,6 +643,7 @@ export function DiaryScreen() {
   const busy = useRef(false);
   const closingCalendar = useRef(false);
   const focusAfterCalendar = useRef(false);
+  const focusAfterMount = useRef(false);
   const input = useRef<TextInputInstance>(null);
   const editorScroll = useRef<KeyboardAwareScrollViewRef>(null);
   const editorInput = useRef<TextInputInstance>(null);
@@ -851,11 +851,21 @@ export function DiaryScreen() {
       setDraft("");
       setPhoto(undefined);
       followThread.current = true;
+      focusAfterMount.current = !calendar;
       setFocusSeed(entry);
     }
     setPrevious(entry);
-    focusComposer();
+    if (focusSeed || calendar) focusComposer();
   }
+
+  useEffect(() => {
+    if (!focused || !focusAfterMount.current) return;
+    const frame = requestAnimationFrame(() => {
+      focusAfterMount.current = false;
+      input.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focused]);
 
   function leaveFocus() {
     const saved = outsideFocus.current;
@@ -1391,6 +1401,7 @@ export function DiaryScreen() {
               />
             )}
             data={entries}
+            testID="compasso-timeline-scroll"
             keyExtractor={(entry) => entry.id}
             renderItem={({ item }) => (
               <Animated.View
@@ -1449,13 +1460,9 @@ export function DiaryScreen() {
             }
           />
         </Animated.View>
-        <ProgressiveBlur
-          singlePass
-          edge="top"
-          height={insets.top + headerHeight + 18}
-          color={theme.paper}
-        />
-        <View
+        <DiaryScrollEdge
+          key={activeDay}
+          scrollIdentifier="compasso-timeline-scroll"
           pointerEvents={focused ? "none" : "box-none"}
           accessibilityElementsHidden={calendar || focused}
           onLayout={({ nativeEvent }) =>
@@ -1521,7 +1528,7 @@ export function DiaryScreen() {
               onPress={openCalendar}
             />
           )}
-        </View>
+        </DiaryScrollEdge>
         {focusSeed && (
           <Animated.View
             entering={focusEnter}
@@ -1539,6 +1546,7 @@ export function DiaryScreen() {
             <FlatList
               ref={threadList}
               data={threadEntries}
+              testID="compasso-thought-scroll"
               keyExtractor={(entry) => entry.id}
               renderItem={({ item }) => (
                 <Animated.View
@@ -1574,7 +1582,8 @@ export function DiaryScreen() {
                 },
               ]}
             />
-            <View
+            <DiaryScrollEdge
+              scrollIdentifier="compasso-thought-scroll"
               onLayout={({ nativeEvent }) =>
                 setFocusHeaderHeight(Math.ceil(nativeEvent.layout.height))
               }
@@ -1594,7 +1603,7 @@ export function DiaryScreen() {
                 label="Fechar modo foco"
                 onPress={closeFocus}
               />
-            </View>
+            </DiaryScrollEdge>
           </Animated.View>
         )}
         {selection && !calendar && (
@@ -1635,144 +1644,146 @@ export function DiaryScreen() {
           importantForAccessibility={
             showComposer ? "auto" : "no-hide-descendants"
           }
-          style={[styles.dock, dock, !showComposer && styles.hiddenDock]}
+          style={[styles.dock, dock]}
         >
-          <KeyboardStickyView
-            pointerEvents="box-none"
-            offset={{ opened: insets.bottom }}
-            style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}
-          >
-            {newIdeas > 0 && !calendar && !focused && (
-              <Animated.View entering={reveal} style={styles.newIdeas}>
-                <GlassSurface interactive style={styles.newIdeasSurface}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityHint="Volta ao início da linha do tempo"
-                    onPress={() =>
-                      timeline.current
-                        ?.getScrollResponder()
-                        ?.scrollTo({ y: 0, animated: !reducedMotion })
-                    }
-                    style={styles.newIdeasButton}
-                  >
-                    <Symbol name="arrow.up" size={15} color={theme.ink} />
-                    <Text
-                      accessibilityLiveRegion="polite"
-                      style={styles.action}
-                    >
-                      {newIdeas === 1
-                        ? "1 nova ideia"
-                        : `${newIdeas} novas ideias`}
-                    </Text>
-                  </Pressable>
-                </GlassSurface>
-              </Animated.View>
-            )}
-            <DiaryComposer
-              surface={surface}
-              expandedContents={expandedContents}
-              compact={compact}
-              expandedWidth={expandedWidth}
-              setComposerHeight={setComposerHeight}
-              setInputHeight={setInputHeight}
-              draft={draft}
-              input={input}
-              focused={focused}
-              emptyToday={emptyToday}
-              setDraft={setDraft}
-              setComposerFocused={setComposerFocused}
-              attachmentsOpen={attachmentsOpen}
-              returnToKeyboard={returnToKeyboard}
-              saving={saving}
-              inputHeight={inputHeight}
-              photo={photo}
-              reveal={reveal}
-              setPhoto={setPhoto}
-              focusComposer={focusComposer}
-              showAttachments={showAttachments}
-              picking={picking}
-              save={save}
-              disabled={disabled}
-              previous={previous}
-            />
-            <Animated.View
-              style={attachmentPanel}
-              pointerEvents={attachmentsOpen ? "auto" : "none"}
-              accessibilityElementsHidden={!attachmentsOpen}
-              importantForAccessibility={
-                attachmentsOpen ? "auto" : "no-hide-descendants"
-              }
+          {showComposer && (
+            <KeyboardStickyView
+              pointerEvents="box-none"
+              offset={{ opened: insets.bottom }}
+              style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}
             >
-              <View style={styles.attachmentPanel}>
-                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                  <GlassSurface
-                    visible={attachmentsOpen}
-                    style={styles.attachmentGlass}
-                  />
-                </View>
-                <Animated.View style={attachmentHandle}>
-                  <GestureDetector gesture={pullTray}>
+              {newIdeas > 0 && !calendar && !focused && (
+                <Animated.View entering={reveal} style={styles.newIdeas}>
+                  <GlassSurface interactive style={styles.newIdeasSurface}>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Fechar anexos"
-                      onPress={closeAttachments}
-                      style={styles.panelGrabber}
+                      accessibilityHint="Volta ao início da linha do tempo"
+                      onPress={() =>
+                        timeline.current
+                          ?.getScrollResponder()
+                          ?.scrollTo({ y: 0, animated: !reducedMotion })
+                      }
+                      style={styles.newIdeasButton}
                     >
-                      <View style={styles.panelHandle} />
+                      <Symbol name="arrow.up" size={15} color={theme.ink} />
+                      <Text
+                        accessibilityLiveRegion="polite"
+                        style={styles.action}
+                      >
+                        {newIdeas === 1
+                          ? "1 nova ideia"
+                          : `${newIdeas} novas ideias`}
+                      </Text>
                     </Pressable>
-                  </GestureDetector>
+                  </GlassSurface>
                 </Animated.View>
-                <Animated.View
-                  style={[styles.attachmentBody, attachmentContents]}
-                >
-                  <View
-                    style={styles.attachmentActions}
-                    onLayout={({ nativeEvent }) =>
-                      attachmentActionsHeight.set(nativeEvent.layout.height)
-                    }
+              )}
+              <DiaryComposer
+                surface={surface}
+                expandedContents={expandedContents}
+                compact={compact}
+                expandedWidth={expandedWidth}
+                setComposerHeight={setComposerHeight}
+                setInputHeight={setInputHeight}
+                draft={draft}
+                input={input}
+                focused={focused}
+                emptyToday={emptyToday}
+                setDraft={setDraft}
+                setComposerFocused={setComposerFocused}
+                attachmentsOpen={attachmentsOpen}
+                returnToKeyboard={returnToKeyboard}
+                saving={saving}
+                inputHeight={inputHeight}
+                photo={photo}
+                reveal={reveal}
+                setPhoto={setPhoto}
+                focusComposer={focusComposer}
+                showAttachments={showAttachments}
+                picking={picking}
+                save={save}
+                disabled={disabled}
+                previous={previous}
+              />
+              <Animated.View
+                style={attachmentPanel}
+                pointerEvents={attachmentsOpen ? "auto" : "none"}
+                accessibilityElementsHidden={!attachmentsOpen}
+                importantForAccessibility={
+                  attachmentsOpen ? "auto" : "no-hide-descendants"
+                }
+              >
+                <View style={styles.attachmentPanel}>
+                  <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                    <GlassSurface
+                      visible={attachmentsOpen}
+                      style={styles.attachmentGlass}
+                    />
+                  </View>
+                  <Animated.View style={attachmentHandle}>
+                    <GestureDetector gesture={pullTray}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Fechar anexos"
+                        onPress={closeAttachments}
+                        style={styles.panelGrabber}
+                      >
+                        <View style={styles.panelHandle} />
+                      </Pressable>
+                    </GestureDetector>
+                  </Animated.View>
+                  <Animated.View
+                    style={[styles.attachmentBody, attachmentContents]}
                   >
-                    <Touch
-                      label="Escolher foto"
-                      onPress={() => void attachPhoto(false)}
-                      style={styles.attachmentAction}
-                      disabled={saving || picking}
+                    <View
+                      style={styles.attachmentActions}
+                      onLayout={({ nativeEvent }) =>
+                        attachmentActionsHeight.set(nativeEvent.layout.height)
+                      }
                     >
-                      <Symbol
-                        name="photo.on.rectangle"
-                        size={24}
-                        color={theme.ink}
-                      />
-                      <Text style={styles.trayLabel}>Fotos</Text>
-                    </Touch>
-                    <Touch
-                      label="Tirar foto"
-                      onPress={() => void attachPhoto(true)}
-                      style={styles.attachmentAction}
-                      disabled={saving || picking}
-                    >
-                      <Symbol name="camera" size={24} color={theme.ink} />
-                      <Text style={styles.trayLabel}>Câmera</Text>
-                    </Touch>
-                    {textRecognition && (
                       <Touch
-                        label="Capturar texto pela câmera"
-                        onPress={() => void attachPhoto(true, "text")}
+                        label="Escolher foto"
+                        onPress={() => void attachPhoto(false)}
                         style={styles.attachmentAction}
                         disabled={saving || picking}
                       >
                         <Symbol
-                          name="text.viewfinder"
+                          name="photo.on.rectangle"
                           size={24}
                           color={theme.ink}
                         />
-                        <Text style={styles.trayLabel}>Ler texto</Text>
+                        <Text style={styles.trayLabel}>Fotos</Text>
                       </Touch>
-                    )}
-                  </View>
-                </Animated.View>
-              </View>
-            </Animated.View>
-          </KeyboardStickyView>
+                      <Touch
+                        label="Tirar foto"
+                        onPress={() => void attachPhoto(true)}
+                        style={styles.attachmentAction}
+                        disabled={saving || picking}
+                      >
+                        <Symbol name="camera" size={24} color={theme.ink} />
+                        <Text style={styles.trayLabel}>Câmera</Text>
+                      </Touch>
+                      {textRecognition && (
+                        <Touch
+                          label="Capturar texto pela câmera"
+                          onPress={() => void attachPhoto(true, "text")}
+                          style={styles.attachmentAction}
+                          disabled={saving || picking}
+                        >
+                          <Symbol
+                            name="text.viewfinder"
+                            size={24}
+                            color={theme.ink}
+                          />
+                          <Text style={styles.trayLabel}>Ler texto</Text>
+                        </Touch>
+                      )}
+                    </View>
+                  </Animated.View>
+                </View>
+              </Animated.View>
+            </KeyboardStickyView>
+          )}
         </Animated.View>
         {calendar && (
           <DiaryCalendar
@@ -1830,58 +1841,13 @@ export function DiaryScreen() {
           />
         )}
         {original && (
-          <Modal
-            transparent
-            animationType={reducedMotion ? "none" : "fade"}
-            onRequestClose={closeOriginal}
-          >
-            <View
-              accessibilityViewIsModal
-              onAccessibilityEscape={closeOriginal}
-              style={[
-                styles.originalLayer,
-                { paddingBottom: insets.bottom + 16 },
-              ]}
-            >
-              <Pressable
-                accessible={false}
-                onPress={closeOriginal}
-                style={StyleSheet.absoluteFill}
-              />
-              <GlassSurface style={styles.originalSheet}>
-                <View style={styles.originalHeader}>
-                  <View style={styles.heading}>
-                    <Text accessibilityRole="header" style={styles.focusTitle}>
-                      Entrada original
-                    </Text>
-                    <Text style={styles.muted}>
-                      {dateLabel(dayKey(new Date(original.createdAt)))} ·{" "}
-                      {timeLabel(original.createdAt)}
-                    </Text>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Voltar à leitura"
-                    onPress={closeOriginal}
-                    style={styles.originalClose}
-                  >
-                    <Symbol name="xmark" size={17} color={theme.ink} />
-                  </Pressable>
-                </View>
-                <ScrollView
-                  style={styles.originalContent}
-                  contentContainerStyle={styles.originalBody}
-                >
-                  <DiaryEntryBody
-                    entry={original}
-                    previous={quotedSource(original.continuationOf)}
-                    selectable
-                    showFavorite
-                  />
-                </ScrollView>
-              </GlassSurface>
-            </View>
-          </Modal>
+          <DiaryOriginal
+            key={original.id}
+            entry={original}
+            previous={quotedSource(original.continuationOf)}
+            date={`${dateLabel(dayKey(new Date(original.createdAt)))} · ${timeLabel(original.createdAt)}`}
+            onClose={closeOriginal}
+          />
         )}
         {entryMenu && (
           <EntryActions

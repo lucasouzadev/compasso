@@ -20,7 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
 import { GlassSurface } from "../cookbooks/zest/components/ui/GlassSurface";
-import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
+import { DiaryScrollEdge } from "./DiaryScrollEdge";
 import { Symbol, Touch } from "../cookbooks/zest/components/ui/Touch";
 import type { DiaryDraft } from "./drafts";
 import { styles, theme, interfaceRed } from "./diaryStyles";
@@ -90,8 +90,9 @@ export function DiaryEditor({
             >
               <View style={styles.editorReadingArea}>
                 <KeyboardAwareScrollView
+                  testID="compasso-editor-scroll"
                   ref={editorScroll}
-                  style={{ marginTop: editorHeaderHeight, flex: 1 }}
+                  style={styles.fill}
                   bottomOffset={editorToolbarHeight + 16}
                   disableScrollOnKeyboardHide
                   alwaysBounceVertical={false}
@@ -99,7 +100,7 @@ export function DiaryEditor({
                   keyboardDismissMode="interactive"
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{
-                    paddingTop: 8,
+                    paddingTop: editorHeaderHeight + 8,
                     paddingBottom: editorToolbarHeight + 16,
                   }}
                 >
@@ -155,19 +156,14 @@ export function DiaryEditor({
                     />
                   </View>
                 </KeyboardAwareScrollView>
-                <View
+                <DiaryScrollEdge
+                  scrollIdentifier="compasso-editor-scroll"
                   pointerEvents="box-none"
                   onLayout={({ nativeEvent }) =>
                     setEditorHeaderHeight(Math.ceil(nativeEvent.layout.height))
                   }
                   style={styles.editorHeader}
                 >
-                  <ProgressiveBlur
-                    singlePass
-                    edge="top"
-                    height={editorHeaderHeight + 14}
-                    color={theme.paper}
-                  />
                   <GlassButton
                     name="xmark"
                     label="Cancelar edição"
@@ -197,7 +193,7 @@ export function DiaryEditor({
                     disabled={editorSaveDisabled}
                     prominent
                   />
-                </View>
+                </DiaryScrollEdge>
                 <KeyboardStickyView
                   offset={{ opened: Math.max(insets.bottom, 12) - 12 }}
                   onLayout={({ nativeEvent }) =>

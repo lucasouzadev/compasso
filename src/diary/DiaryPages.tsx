@@ -123,8 +123,7 @@ function DayPage({
   const [preview, setPreview] = useState<Entry[]>([]);
   useEffect(() => {
     const abort = new AbortController();
-    const newest = [...ids].sort((a, b) => b.localeCompare(a)).slice(0, 4);
-    void readSearchEntries(new Map([[day, newest]]), abort.signal).then(
+    void readSearchEntries(new Map([[day, ids]]), abort.signal).then(
       ({ entries }) => {
         if (!abort.signal.aborted) setPreview(entries.reverse());
       },
@@ -136,29 +135,41 @@ function DayPage({
     ? "Hoje"
     : date.toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
   const count = ids.length === 1 ? "1 registro" : `${ids.length} registros`;
-  const photoEntry = preview.findLast((entry) => entry.photo);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${title}, ${date.getFullYear()}, ${count}`}
-      accessibilityState={{ selected: current }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.card,
-        { width },
-        current && styles.current,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text style={styles.date}>{title}</Text>
-      <Text style={styles.count}>
-        {date.getFullYear()} · {count}
-      </Text>
-      <View style={styles.messages}>
-        {preview.map((entry) => {
-          const photo = entry === photoEntry ? entryPhotoUri(entry) : undefined;
+    <View style={[styles.card, { width }, current && styles.current]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Abrir ${title}, ${date.getFullYear()}, ${count}`}
+        accessibilityState={{ selected: current }}
+        onPress={onPress}
+        style={({ pressed }) => [styles.pageHeading, pressed && styles.pressed]}
+      >
+        <Text style={styles.date}>{title}</Text>
+        <Text style={styles.count}>
+          {date.getFullYear()} · {count}
+        </Text>
+      </Pressable>
+      <FlatList
+        nestedScrollEnabled
+        bounces={false}
+        style={styles.messages}
+        contentContainerStyle={styles.messageList}
+        data={preview}
+        keyExtractor={(entry) => entry.id}
+        ListEmptyComponent={
+          !ids.length ? (
+            <Text style={styles.count}>Nenhuma entrada neste dia.</Text>
+          ) : undefined
+        }
+        renderItem={({ item: entry }) => {
+          const photo = entryPhotoUri(entry);
           return (
-            <View key={entry.id} style={styles.bubble}>
+            <Pressable
+              onPress={onPress}
+              accessibilityRole="button"
+              accessibilityHint="Abre a página do dia"
+              style={styles.bubble}
+            >
               {!!entry.text && (
                 <Text numberOfLines={3} style={styles.message}>
                   {entry.text}
@@ -169,14 +180,11 @@ function DayPage({
               ) : (
                 !entry.text && <Text style={styles.message}>Foto</Text>
               )}
-            </View>
+            </Pressable>
           );
-        })}
-        {!ids.length && (
-          <Text style={styles.count}>Nenhuma entrada neste dia.</Text>
-        )}
-      </View>
-    </Pressable>
+        }}
+      />
+    </View>
   );
 }
 
@@ -211,7 +219,9 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.8 },
   date: { color: theme.ink, fontSize: 22, fontWeight: "600" },
   count: { color: theme.muted, fontSize: 13 },
-  messages: { marginTop: 18, gap: 8 },
+  pageHeading: { minHeight: 44 },
+  messages: { flex: 1, marginTop: 12 },
+  messageList: { gap: 8 },
   bubble: {
     alignSelf: "flex-end",
     maxWidth: "90%",

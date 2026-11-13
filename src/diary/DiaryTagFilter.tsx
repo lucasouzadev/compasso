@@ -82,6 +82,7 @@ export function DiaryTagMenu({
   ready,
   error = false,
   onRetry,
+  inToolbar = false,
 }: {
   tags: string[];
   selected?: string;
@@ -89,6 +90,7 @@ export function DiaryTagMenu({
   ready: boolean;
   error?: boolean;
   onRetry?: () => void;
+  inToolbar?: boolean;
 }) {
   const theme = useGlassTheme();
   const glass = useNativeGlass();
@@ -101,45 +103,54 @@ export function DiaryTagMenu({
   const empty = ready ? "Nenhuma tag no diário" : "Carregando tags…";
   const retry = "Tentar carregar tags novamente";
   if (Platform.OS === "ios") {
-    return (
-      <Host colorScheme="light" ignoreSafeArea="all" style={styles.iconMenu}>
-        <Menu
-          label={
-            <Image
-              systemName="line.3.horizontal.decrease"
-              size={20}
-              modifiers={[
-                frame({ width: 14, height: 14 }),
-                foregroundStyle(color),
-              ]}
-            />
-          }
-          modifiers={[
-            buttonStyle(glass ? "glass" : "bordered"),
-            buttonBorderShape("circle"),
-            controlSize("large"),
-            menuIndicator("hidden"),
-            accessibilityLabel(label),
-          ]}
-        >
-          <Button
-            label="Todas as entradas"
-            systemImage={selected ? undefined : "checkmark"}
-            onPress={() => choose()}
+    const menu = (
+      <Menu
+        label={
+          <Image
+            systemName="line.3.horizontal.decrease"
+            size={20}
+            modifiers={[
+              frame({ width: 14, height: 14 }),
+              foregroundStyle(color),
+            ]}
           />
-          {tags.map((tag) => (
-            <Button
-              key={tag}
-              label={`#${tag}`}
-              systemImage={selected === tag ? "checkmark" : undefined}
-              onPress={() => choose(tag)}
-            />
-          ))}
-          {!tags.length && !error && (
-            <Button label={empty} modifiers={[disabled(true)]} />
-          )}
-          {error && <Button label={retry} onPress={onRetry} />}
-        </Menu>
+        }
+        modifiers={[
+          ...(!inToolbar
+            ? [
+                buttonStyle(glass ? "glass" : "bordered"),
+                buttonBorderShape("circle"),
+                controlSize("large"),
+              ]
+            : []),
+          menuIndicator("hidden"),
+          accessibilityLabel(label),
+        ]}
+      >
+        <Button
+          label="Todas as entradas"
+          systemImage={selected ? undefined : "checkmark"}
+          onPress={() => choose()}
+        />
+        {tags.map((tag) => (
+          <Button
+            key={tag}
+            label={`#${tag}`}
+            systemImage={selected === tag ? "checkmark" : undefined}
+            onPress={() => choose(tag)}
+          />
+        ))}
+        {!tags.length && !error && (
+          <Button label={empty} modifiers={[disabled(true)]} />
+        )}
+        {error && <Button label={retry} onPress={onRetry} />}
+      </Menu>
+    );
+    return inToolbar ? (
+      menu
+    ) : (
+      <Host colorScheme="light" ignoreSafeArea="all" style={styles.iconMenu}>
+        {menu}
       </Host>
     );
   }

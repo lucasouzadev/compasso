@@ -36,6 +36,7 @@ import {
 import { theme } from "../cookbooks/zest/theme";
 import { collectDiaryTags, matchesDiaryTag, type Entry } from "./entries";
 import { DiaryTagFilter, DiaryTagMenu } from "./DiaryTagFilter";
+import { DiaryScrollEdge } from "./DiaryScrollEdge";
 import type { MenuProtectedBand } from "./menuLayout";
 import {
   entryPhotoUri,
@@ -290,10 +291,11 @@ export function DiaryCalendar({
                 <View style={styles.handle} />
               </Pressable>
             </GestureDetector>
-            <View style={[styles.monthRow, styles.monthHeader]}>
-              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                <GlassSurface materialize={0} style={styles.headerGlass} />
-              </View>
+            <DiaryScrollEdge
+              scrollIdentifier="compasso-calendar-scroll"
+              hardEdge
+              style={[styles.monthRow, styles.monthHeader]}
+            >
               <Text accessibilityRole="header" style={styles.monthTitle}>
                 {month.toLocaleDateString("pt-BR", {
                   month: "long",
@@ -332,12 +334,13 @@ export function DiaryCalendar({
                   onSelect={setTag}
                 />
               )}
-            </View>
+            </DiaryScrollEdge>
             <View style={styles.grow}>
               <GestureDetector gesture={scroll}>
                 <ScrollView
                   style={styles.grow}
-                  alwaysBounceVertical
+                  testID="compasso-calendar-scroll"
+                  bounces={false}
                   directionalLockEnabled
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={styles.content}
@@ -592,15 +595,14 @@ function CalendarEntryDetail({
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <GlassSurface materialize={0} style={styles.panel} />
       </View>
-      <View
+      <DiaryScrollEdge
+        scrollIdentifier="compasso-calendar-entry-scroll"
+        hardEdge
         style={styles.detailHeader}
         onLayout={({ nativeEvent }) =>
           setHeaderHeight(nativeEvent.layout.height)
         }
       >
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <GlassSurface materialize={0} style={styles.headerGlass} />
-        </View>
         <GlassButton
           name="chevron.left"
           label="Voltar ao calendário"
@@ -610,10 +612,11 @@ function CalendarEntryDetail({
         <Text accessibilityRole="header" style={styles.month}>
           {fullDate(day)}
         </Text>
-      </View>
+      </DiaryScrollEdge>
       <ScrollView
+        testID="compasso-calendar-entry-scroll"
         style={styles.detailScroll}
-        alwaysBounceVertical={false}
+        bounces={false}
         onContentSizeChange={(_, height) => setContentHeight(height)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.detailContent}
@@ -659,7 +662,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 6,
   },
-  headerGlass: { flex: 1, borderRadius: 0 },
   monthControls: { flexDirection: "row", borderRadius: 22 },
   monthButton: {
     width: 44,

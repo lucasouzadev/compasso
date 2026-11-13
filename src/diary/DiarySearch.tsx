@@ -1,3 +1,16 @@
+import {
+  Button,
+  Host,
+  NavigationStack,
+  RNHostView,
+  Toolbar,
+  ToolbarItem,
+} from "@expo/ui/swift-ui";
+import {
+  accessibilityLabel,
+  navigationBarTitleDisplayMode,
+  navigationTitle,
+} from "@expo/ui/swift-ui/modifiers";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -26,7 +39,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { dayKey, parseDay } from "../cookbooks/zest/data/diary";
 import { GlassButton } from "../cookbooks/zest/components/ui/GlassButton";
-import { ProgressiveBlur } from "../cookbooks/zest/components/ui/ProgressiveBlur";
 import {
   GlassSurface,
   useGlassTheme,
@@ -169,264 +181,216 @@ export function DiarySearch({
             ? "Nenhuma entrada corresponde à busca."
             : "Digite uma palavra ou trecho para encontrar o que escreveu.";
 
-  return (
-    <Modal
-      presentationStyle="pageSheet"
-      animationType={reducedMotion ? "none" : "slide"}
-      onShow={() => input.current?.focus()}
-      onRequestClose={goBack}
-    >
-      <GestureHandlerRootView style={styles.fill}>
-        <SafeAreaProvider
-          style={[styles.fill, { backgroundColor: theme.paper }]}
+  const title = selected
+    ? "Entrada"
+    : favorites
+      ? "Favoritos"
+      : "Buscar no diário";
+  const backLabel = history.length
+    ? "Voltar à entrada"
+    : selected
+      ? "Voltar aos resultados"
+      : "Fechar busca";
+  const tagMenu = (inToolbar: boolean) => (
+    <DiaryTagMenu
+      inToolbar={inToolbar}
+      tags={tags}
+      selected={tag}
+      ready={ready}
+      error={failed || incomplete}
+      onRetry={retry}
+      onSelect={setTag}
+    />
+  );
+  const content = (
+    <GestureHandlerRootView style={styles.fill}>
+      <SafeAreaProvider style={[styles.fill, { backgroundColor: theme.paper }]}>
+        <KeyboardAvoidingView
+          automaticOffset
+          behavior="padding"
+          enabled={Platform.OS === "ios"}
+          style={styles.fill}
+          onAccessibilityEscape={goBack}
         >
-          <KeyboardAvoidingView
-            automaticOffset
-            behavior="padding"
-            enabled={Platform.OS === "ios"}
-            style={styles.fill}
-            onAccessibilityEscape={goBack}
+          <SafeAreaView
+            edges={{
+              bottom: "maximum",
+              left: "maximum",
+              right: "maximum",
+              top: Platform.OS === "ios" ? "off" : "maximum",
+            }}
+            style={styles.sheet}
           >
-            <SafeAreaView
-              edges={{
-                top: "maximum",
-                bottom: "maximum",
-                left: "maximum",
-                right: "maximum",
-              }}
-              style={styles.sheet}
-            >
+            {Platform.OS !== "ios" && (
               <View style={styles.header}>
-                <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                  <GlassSurface style={styles.headerGlass} materialize={0} />
-                </View>
                 <GlassButton
                   name={selected ? "chevron.left" : "xmark"}
-                  label={
-                    history.length
-                      ? "Voltar à entrada"
-                      : selected
-                        ? "Voltar aos resultados"
-                        : "Fechar busca"
-                  }
+                  label={backLabel}
                   onPress={goBack}
                 />
                 <Text
                   accessibilityRole="header"
                   style={[styles.title, { color: theme.ink }]}
                 >
-                  {selected
-                    ? "Entrada"
-                    : favorites
-                      ? "Favoritos"
-                      : "Buscar no diário"}
+                  {title}
                 </Text>
                 {!selected && Platform.OS !== "web" ? (
-                  <DiaryTagMenu
-                    tags={tags}
-                    selected={tag}
-                    ready={ready}
-                    error={failed || incomplete}
-                    onRetry={retry}
-                    onSelect={setTag}
-                  />
+                  tagMenu(false)
                 ) : (
                   <View style={styles.headerSpacer} />
                 )}
               </View>
-              <View style={styles.fill}>
-                <View
-                  style={styles.fill}
-                  pointerEvents={selected ? "none" : "auto"}
-                  accessibilityElementsHidden={!!selected}
-                  importantForAccessibility={
-                    selected ? "no-hide-descendants" : "auto"
-                  }
-                >
-                  <View style={styles.tabs}>
-                    <View pointerEvents="none" style={styles.tabGlassBacking}>
-                      <GlassSurface style={styles.tabGlass} materialize={0} />
-                    </View>
-                    <Animated.View
-                      pointerEvents="none"
-                      style={[styles.tabIndicator, indicator]}
+            )}
+            <View style={styles.fill}>
+              <View
+                style={styles.fill}
+                pointerEvents={selected ? "none" : "auto"}
+                accessibilityElementsHidden={!!selected}
+                importantForAccessibility={
+                  selected ? "no-hide-descendants" : "auto"
+                }
+              >
+                <View style={styles.tabs}>
+                  <View pointerEvents="none" style={styles.tabGlassBacking}>
+                    <GlassSurface style={styles.tabGlass} materialize={0} />
+                  </View>
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[styles.tabIndicator, indicator]}
+                  />
+                  {[false, true].map((value) => (
+                    <Pressable
+                      key={String(value)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: favorites === value }}
+                      onPress={() => setFavorites(value)}
+                      style={styles.tab}
+                    >
+                      <Symbol
+                        name={value ? "bookmark" : "magnifyingglass"}
+                        size={14}
+                        color={favorites === value ? theme.accent : theme.muted}
+                      />
+                      <Text
+                        style={[
+                          styles.tabLabel,
+                          {
+                            color:
+                              favorites === value ? theme.accent : theme.muted,
+                          },
+                        ]}
+                      >
+                        {value ? "Favoritos" : "Buscar"}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {Platform.OS === "web" && tags.length > 0 && (
+                  <DiaryTagFilter
+                    tags={tags}
+                    selected={tag}
+                    onSelect={setTag}
+                  />
+                )}
+                <View pointerEvents="box-none" style={styles.searchDock}>
+                  <GlassSurface materialize={0} style={styles.searchField}>
+                    <Symbol
+                      name="magnifyingglass"
+                      size={17}
+                      color={theme.muted}
                     />
-                    {[false, true].map((value) => (
+                    <TextInput
+                      ref={input}
+                      accessibilityLabel="Texto para buscar"
+                      placeholder="Busque pelo que escreveu"
+                      placeholderTextColor={theme.muted}
+                      selectionColor={theme.accent}
+                      value={query}
+                      onChangeText={setQuery}
+                      returnKeyType="search"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      style={[styles.input, { color: theme.ink }]}
+                    />
+                    {query.length > 0 && (
                       <Pressable
-                        key={String(value)}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected: favorites === value }}
-                        onPress={() => setFavorites(value)}
-                        style={styles.tab}
+                        accessibilityRole="button"
+                        accessibilityLabel="Limpar busca"
+                        onPress={() => {
+                          setQuery("");
+                          input.current?.focus();
+                        }}
+                        style={styles.clear}
                       >
                         <Symbol
-                          name={value ? "bookmark" : "magnifyingglass"}
-                          size={14}
-                          color={
-                            favorites === value ? theme.accent : theme.muted
-                          }
+                          name="xmark.circle.fill"
+                          size={18}
+                          color={theme.muted}
                         />
-                        <Text
-                          style={[
-                            styles.tabLabel,
-                            {
-                              color:
-                                favorites === value
-                                  ? theme.accent
-                                  : theme.muted,
-                            },
-                          ]}
-                        >
-                          {value ? "Favoritos" : "Buscar"}
-                        </Text>
                       </Pressable>
-                    ))}
-                  </View>
-                  {Platform.OS === "web" && tags.length > 0 && (
-                    <DiaryTagFilter
-                      tags={tags}
-                      selected={tag}
-                      onSelect={setTag}
-                    />
-                  )}
-                  <View pointerEvents="box-none" style={styles.searchDock}>
-                    <GlassSurface materialize={0} style={styles.searchField}>
-                      <Symbol
-                        name="magnifyingglass"
-                        size={17}
-                        color={theme.muted}
-                      />
-                      <TextInput
-                        ref={input}
-                        accessibilityLabel="Texto para buscar"
-                        placeholder="Busque pelo que escreveu"
-                        placeholderTextColor={theme.muted}
-                        selectionColor={theme.accent}
-                        value={query}
-                        onChangeText={setQuery}
-                        returnKeyType="search"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        style={[styles.input, { color: theme.ink }]}
-                      />
-                      {query.length > 0 && (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Limpar busca"
-                          onPress={() => {
-                            setQuery("");
-                            input.current?.focus();
-                          }}
-                          style={styles.clear}
+                    )}
+                  </GlassSurface>
+                </View>
+                <View style={styles.fill}>
+                  <SectionList
+                    bounces={false}
+                    sections={sections}
+                    keyExtractor={(entry) => entry.id}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="interactive"
+                    stickySectionHeadersEnabled={false}
+                    ListHeaderComponent={
+                      queryPending && sections.length ? (
+                        <ActivityIndicator
+                          accessibilityLabel="Atualizando busca"
+                          color={theme.accent}
+                        />
+                      ) : undefined
+                    }
+                    contentContainerStyle={[
+                      styles.results,
+                      !sections.length && styles.emptyResults,
+                    ]}
+                    ListEmptyComponent={
+                      (hasQuery || favorites || !!tag) &&
+                      ((!ready && !failed) || queryPending) ? (
+                        <ActivityIndicator
+                          accessibilityLabel="Buscando entradas"
+                          color={theme.accent}
+                        />
+                      ) : (
+                        <Animated.View
+                          entering={appear}
+                          key={emptyText}
+                          style={styles.emptyState}
                         >
-                          <Symbol
-                            name="xmark.circle.fill"
-                            size={18}
-                            color={theme.muted}
-                          />
-                        </Pressable>
-                      )}
-                    </GlassSurface>
-                  </View>
-                  <View style={styles.fill}>
-                    <SectionList
-                      sections={sections}
-                      keyExtractor={(entry) => entry.id}
-                      keyboardShouldPersistTaps="handled"
-                      keyboardDismissMode="interactive"
-                      stickySectionHeadersEnabled={false}
-                      ListHeaderComponent={
-                        queryPending && sections.length ? (
-                          <ActivityIndicator
-                            accessibilityLabel="Atualizando busca"
-                            color={theme.accent}
-                          />
-                        ) : undefined
-                      }
-                      contentContainerStyle={[
-                        styles.results,
-                        !sections.length && styles.emptyResults,
-                      ]}
-                      ListEmptyComponent={
-                        (hasQuery || favorites || !!tag) &&
-                        ((!ready && !failed) || queryPending) ? (
-                          <ActivityIndicator
-                            accessibilityLabel="Buscando entradas"
-                            color={theme.accent}
-                          />
-                        ) : (
-                          <Animated.View
-                            entering={appear}
-                            key={emptyText}
-                            style={styles.emptyState}
+                          <View accessible={false} style={styles.illustration}>
+                            <View style={styles.illustrationPage} />
+                            <Symbol
+                              name={favorites ? "bookmark" : "magnifyingglass"}
+                              size={30}
+                              color={theme.accent}
+                            />
+                          </View>
+                          <Text
+                            style={[styles.emptyTitle, { color: theme.ink }]}
                           >
-                            <View
-                              accessible={false}
-                              style={styles.illustration}
-                            >
-                              <View style={styles.illustrationPage} />
-                              <Symbol
-                                name={
-                                  favorites ? "bookmark" : "magnifyingglass"
-                                }
-                                size={30}
-                                color={theme.accent}
-                              />
-                            </View>
-                            <Text
-                              style={[styles.emptyTitle, { color: theme.ink }]}
-                            >
-                              {failed
-                                ? "Não foi possível buscar"
-                                : incomplete
-                                  ? "Busca incompleta"
-                                  : favorites && !hasQuery && !tag
-                                    ? "Seus favoritos"
-                                    : hasQuery || tag
-                                      ? "Sem resultados"
-                                      : "Reencontre um pensamento"}
-                            </Text>
-                            <Text
-                              style={[styles.empty, { color: theme.muted }]}
-                            >
-                              {emptyText}
-                            </Text>
-                            {(failed || incomplete) && (
-                              <Touch
-                                label="Tentar buscar novamente"
-                                onPress={retry}
-                                style={styles.stateAction}
-                              >
-                                <Text style={{ color: theme.accent }}>
-                                  Tentar novamente
-                                </Text>
-                              </Touch>
-                            )}
-                            {(tag || favorites) && (
-                              <Touch
-                                label="Limpar filtros de busca"
-                                onPress={clearFilters}
-                                style={styles.stateAction}
-                              >
-                                <Text style={{ color: theme.accent }}>
-                                  Limpar filtros
-                                </Text>
-                              </Touch>
-                            )}
-                          </Animated.View>
-                        )
-                      }
-                      ListFooterComponent={
-                        incomplete && sections.length > 0 ? (
-                          <View style={styles.emptyState}>
-                            <Text
-                              accessibilityLiveRegion="polite"
-                              style={[styles.empty, { color: theme.muted }]}
-                            >
-                              Algumas entradas não puderam ser lidas.
-                            </Text>
+                            {failed
+                              ? "Não foi possível buscar"
+                              : incomplete
+                                ? "Busca incompleta"
+                                : favorites && !hasQuery && !tag
+                                  ? "Seus favoritos"
+                                  : hasQuery || tag
+                                    ? "Sem resultados"
+                                    : "Reencontre um pensamento"}
+                          </Text>
+                          <Text style={[styles.empty, { color: theme.muted }]}>
+                            {emptyText}
+                          </Text>
+                          {(failed || incomplete) && (
                             <Touch
-                              label="Tentar ler entradas novamente"
+                              label="Tentar buscar novamente"
                               onPress={retry}
                               style={styles.stateAction}
                             >
@@ -434,129 +398,194 @@ export function DiarySearch({
                                 Tentar novamente
                               </Text>
                             </Touch>
-                          </View>
-                        ) : undefined
-                      }
-                      renderSectionHeader={({ section }) => (
-                        <Text
-                          accessibilityRole="header"
-                          style={[styles.day, { color: theme.muted }]}
-                        >
-                          {dateLabel(section.day)}
-                        </Text>
-                      )}
-                      renderItem={({ item }) => (
-                        <Animated.View entering={fade}>
-                          <Pressable
-                            accessibilityRole="button"
-                            disabled={queryPending}
-                            onPress={() => {
-                              Keyboard.dismiss();
-                              setReadingOffset(0);
-                              setHistory([]);
-                              setSelected(item);
-                            }}
-                            style={({ pressed }) => [
-                              styles.result,
-                              {
-                                borderColor: theme.line,
-                                opacity: pressed ? 0.65 : 1,
-                              },
-                            ]}
-                          >
-                            <View style={styles.resultIcon}>
-                              <Symbol
-                                name={
-                                  item.favorite
-                                    ? "bookmark.fill"
-                                    : item.photo
-                                      ? "photo"
-                                      : "text.alignleft"
-                                }
-                                size={17}
-                                color={theme.accent}
-                              />
-                            </View>
-                            <View style={styles.fill}>
-                              <Text
-                                style={[styles.time, { color: theme.muted }]}
-                              >
-                                {entryTime(item)}
+                          )}
+                          {(tag || favorites) && (
+                            <Touch
+                              label="Limpar filtros de busca"
+                              onPress={clearFilters}
+                              style={styles.stateAction}
+                            >
+                              <Text style={{ color: theme.accent }}>
+                                Limpar filtros
                               </Text>
-                              <Text
-                                numberOfLines={2}
-                                style={[styles.excerpt, { color: theme.ink }]}
-                              >
-                                {diarySearchExcerpt(item.text, deferredQuery) ||
-                                  "Foto"}
-                              </Text>
-                            </View>
-                            <Symbol
-                              name="chevron.right"
-                              size={13}
-                              color={theme.muted}
-                            />
-                          </Pressable>
+                            </Touch>
+                          )}
                         </Animated.View>
-                      )}
-                    />
-                  </View>
-                </View>
-                {selected && (
-                  <View
-                    style={[
-                      StyleSheet.absoluteFill,
-                      { backgroundColor: theme.paper },
-                    ]}
-                  >
-                    <ScrollView
-                      key={selected.id}
-                      contentOffset={{
-                        x: 0,
-                        y: readingOffset,
-                      }}
-                      scrollEventThrottle={16}
-                      onScroll={({ nativeEvent }) =>
-                        readingOffsets.current.set(
-                          selected.id,
-                          nativeEvent.contentOffset.y,
-                        )
-                      }
-                      contentContainerStyle={{ paddingBottom: 24 }}
-                      style={styles.fill}
-                    >
-                      <Text style={[styles.day, { color: theme.muted }]}>
-                        {dateLabel(entryDay(selected))} · {entryTime(selected)}
-                      </Text>
-                      <View
-                        style={[styles.entry, { backgroundColor: "#F8DFDB" }]}
+                      )
+                    }
+                    ListFooterComponent={
+                      incomplete && sections.length > 0 ? (
+                        <View style={styles.emptyState}>
+                          <Text
+                            accessibilityLiveRegion="polite"
+                            style={[styles.empty, { color: theme.muted }]}
+                          >
+                            Algumas entradas não puderam ser lidas.
+                          </Text>
+                          <Touch
+                            label="Tentar ler entradas novamente"
+                            onPress={retry}
+                            style={styles.stateAction}
+                          >
+                            <Text style={{ color: theme.accent }}>
+                              Tentar novamente
+                            </Text>
+                          </Touch>
+                        </View>
+                      ) : undefined
+                    }
+                    renderSectionHeader={({ section }) => (
+                      <Text
+                        accessibilityRole="header"
+                        style={[styles.day, { color: theme.muted }]}
                       >
-                        <DiaryEntryBody
-                          entry={selected}
-                          previous={previous}
-                          selectable
-                          showFavorite
-                          onOpenOriginal={(source) => {
+                        {dateLabel(section.day)}
+                      </Text>
+                    )}
+                    renderItem={({ item }) => (
+                      <Animated.View entering={fade}>
+                        <Pressable
+                          accessibilityRole="button"
+                          disabled={queryPending}
+                          onPress={() => {
+                            Keyboard.dismiss();
                             setReadingOffset(0);
-                            setHistory((current) => [...current, selected]);
-                            setSelected(source);
+                            setHistory([]);
+                            setSelected(item);
                           }}
-                        />
-                      </View>
-                    </ScrollView>
-                    <ProgressiveBlur
-                      singlePass
-                      edge="top"
-                      height={12}
-                      color={theme.paper}
-                    />
-                  </View>
-                )}
+                          style={({ pressed }) => [
+                            styles.result,
+                            {
+                              borderColor: theme.line,
+                              opacity: pressed ? 0.65 : 1,
+                            },
+                          ]}
+                        >
+                          <View style={styles.resultIcon}>
+                            <Symbol
+                              name={
+                                item.favorite
+                                  ? "bookmark.fill"
+                                  : item.photo
+                                    ? "photo"
+                                    : "text.alignleft"
+                              }
+                              size={17}
+                              color={theme.accent}
+                            />
+                          </View>
+                          <View style={styles.fill}>
+                            <Text style={[styles.time, { color: theme.muted }]}>
+                              {entryTime(item)}
+                            </Text>
+                            <Text
+                              numberOfLines={2}
+                              style={[styles.excerpt, { color: theme.ink }]}
+                            >
+                              {diarySearchExcerpt(item.text, deferredQuery) ||
+                                "Foto"}
+                            </Text>
+                          </View>
+                          <Symbol
+                            name="chevron.right"
+                            size={13}
+                            color={theme.muted}
+                          />
+                        </Pressable>
+                      </Animated.View>
+                    )}
+                  />
+                </View>
               </View>
-            </SafeAreaView>
-          </KeyboardAvoidingView>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
+              {selected && (
+                <View
+                  style={[
+                    StyleSheet.absoluteFill,
+                    { backgroundColor: theme.paper },
+                  ]}
+                >
+                  <ScrollView
+                    bounces={false}
+                    key={selected.id}
+                    contentOffset={{
+                      x: 0,
+                      y: readingOffset,
+                    }}
+                    scrollEventThrottle={16}
+                    onScroll={({ nativeEvent }) =>
+                      readingOffsets.current.set(
+                        selected.id,
+                        nativeEvent.contentOffset.y,
+                      )
+                    }
+                    contentContainerStyle={{ paddingBottom: 24 }}
+                    style={styles.fill}
+                  >
+                    <Text style={[styles.day, { color: theme.muted }]}>
+                      {dateLabel(entryDay(selected))} · {entryTime(selected)}
+                    </Text>
+                    <View
+                      style={[styles.entry, { backgroundColor: "#F8DFDB" }]}
+                    >
+                      <DiaryEntryBody
+                        entry={selected}
+                        previous={previous}
+                        selectable
+                        showFavorite
+                        onOpenOriginal={(source) => {
+                          setReadingOffset(0);
+                          setHistory((current) => [...current, selected]);
+                          setSelected(source);
+                        }}
+                      />
+                    </View>
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+
+  return (
+    <Modal
+      presentationStyle="pageSheet"
+      animationType={reducedMotion ? "none" : "slide"}
+      onShow={() => input.current?.focus()}
+      onRequestClose={goBack}
+    >
+      {Platform.OS === "ios" ? (
+        <Host style={styles.fill} colorScheme="light">
+          <NavigationStack>
+            <Toolbar
+              modifiers={[
+                navigationTitle(title),
+                navigationBarTitleDisplayMode("inline"),
+              ]}
+            >
+              <RNHostView>{content}</RNHostView>
+              <Toolbar.Content>
+                <ToolbarItem placement="topBarLeading">
+                  <Button
+                    systemImage={selected ? "chevron.left" : "xmark"}
+                    modifiers={[accessibilityLabel(backLabel)]}
+                    onPress={goBack}
+                  />
+                </ToolbarItem>
+                {!selected && (
+                  <ToolbarItem placement="topBarTrailing">
+                    {tagMenu(true)}
+                  </ToolbarItem>
+                )}
+              </Toolbar.Content>
+            </Toolbar>
+          </NavigationStack>
+        </Host>
+      ) : (
+        content
+      )}
     </Modal>
   );
 }
@@ -581,7 +610,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 4,
   },
-  headerGlass: { flex: 1, borderRadius: 0 },
   headerSpacer: { width: 44 },
   title: { flex: 1, fontSize: 19, fontWeight: "600", textAlign: "center" },
   tabs: {
